@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      # The split scripts rebuild whole directories; a syntax error in one is
+      # discovered at the worst possible moment otherwise.
+      - name: Shell syntax
+        run: |
+          for script in deployment/*.sh; do
+            bash -n "$script" && echo "ok  $script"
+          done
+
+      - name: Scripts are executable
+        run: |
+          status=0
+          for script in deployment/*.sh; do
+            if [ ! -x "$script" ]; then
+              echo "not executable: $script" >&2
+              status=1
+            fi
+          done
+          exit $status
+
+      - name: Compose file is valid
+        run: docker compose -f docker/docker-compose.yml config --quiet
+
+      - name: Editor and package templates parse
+        run: |
+          status=0
+          while IFS= read -r file; do
+            node -e '
+              const fs = require("node:fs");
+              const raw = fs.readFileSync(process.argv[1], "utf8");
+              // VS Code tolerates comments in these files; JSON.parse does not.
+              const stripped = raw
+                .replace(/^\s*\/\/.*$/gm, "")
+                .replace(/\/\*[\s\S]*?\*\//g, "");
+              JSON.parse(stripped);
+            ' "$file" || { echo "invalid: $file" >&2; status=1; }
+          done < <(find deployment/templates -name '*.json' -o -name '*.code-workspace')
+          exit $status

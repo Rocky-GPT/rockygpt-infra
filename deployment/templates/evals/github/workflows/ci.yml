@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # The suites import the engine directly, so both siblings are needed.
+      - uses: actions/checkout@v7
+        with:
+          path: rockygpt-evals
+      - uses: actions/checkout@v7
+        with:
+          repository: Rocky-GPT/rockygpt-brain
+          path: rockygpt-brain
+      - uses: actions/checkout@v7
+        with:
+          repository: Rocky-GPT/rockygpt-data
+          path: rockygpt-data
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: rockygpt-evals/package-lock.json
+
+      # Sibling checkouts need their own dependencies. This repository
+      # typechecks their sources through tsconfig paths, so a sibling without
+      # node_modules fails on the packages it imports — pg, for one — rather
+      # than on anything wrong here.
+      - name: Install rockygpt-data dependencies
+        run: npm ci
+        working-directory: rockygpt-data
+
+      - name: Install rockygpt-brain dependencies
+        run: npm ci
+        working-directory: rockygpt-brain
+
+      - run: npm ci
+        working-directory: rockygpt-evals
+
+      - name: Type check
+        run: npm run typecheck
+        working-directory: rockygpt-evals
+
+      - name: Lint
+        run: npm run lint
+        working-directory: rockygpt-evals
+
+  # The suites themselves spend real model tokens and read the live database,
+  # so they are not run on every push. Trigger this by hand, or on a schedule
+  # once the repository holds OPENAI_API_KEY and DATABASE_URL.
+  suites:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: rockygpt-evals
+      - uses: actions/checkout@v7
+        with:
+          repository: Rocky-GPT/rockygpt-brain
+          path: rockygpt-brain
+      - uses: actions/checkout@v7
+        with:
+          repository: Rocky-GPT/rockygpt-data
+          path: rockygpt-data
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: rockygpt-evals/package-lock.json
+      # Sibling checkouts need their own dependencies. This repository
+      # typechecks their sources through tsconfig paths, so a sibling without
+      # node_modules fails on the packages it imports — pg, for one — rather
+      # than on anything wrong here.
+      - name: Install rockygpt-data dependencies
+        run: npm ci
+        working-directory: rockygpt-data
+
+      - name: Install rockygpt-brain dependencies
+        run: npm ci
+        working-directory: rockygpt-brain
+
+      - run: npm ci
+        working-directory: rockygpt-evals
+      - name: Grounding
+        working-directory: rockygpt-evals
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run test:grounding

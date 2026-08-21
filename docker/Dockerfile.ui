@@ -1,0 +1,21 @@
+# The Next.js web app. Talks to the brain over BRAIN_URL, never in process.
+FROM node:22-slim AS builder
+WORKDIR /srv
+
+COPY package*.json ./
+COPY ui/package.json ./ui/
+COPY brain/package.json ./brain/
+COPY data/package.json ./data/
+RUN npm ci
+
+COPY ui ./ui
+COPY brain ./brain
+COPY data ./data
+RUN npm run build
+
+FROM node:22-slim AS runner
+WORKDIR /srv
+ENV NODE_ENV=production
+COPY --from=builder /srv ./
+EXPOSE 3000
+CMD ["npm", "run", "start", "--workspace", "@rockygpt/ui"]

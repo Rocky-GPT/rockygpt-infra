@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # The packages resolve each other as sibling directories, so CI has to
+      # reproduce that layout. Checking this repository out alone would leave
+      # @rockygpt/data a dangling symlink: npm install still succeeds, and the
+      # failure only shows up at typecheck. Exercising the real wiring here is
+      # the point of the job.
+      - uses: actions/checkout@v7
+        with:
+          path: rockygpt-brain
+
+      - uses: actions/checkout@v7
+        with:
+          repository: Rocky-GPT/rockygpt-data
+          path: rockygpt-data
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: rockygpt-brain/package-lock.json
+
+      # Sibling checkouts need their own dependencies. This repository
+      # typechecks their sources through tsconfig paths, so a sibling without
+      # node_modules fails on the packages it imports — pg, for one — rather
+      # than on anything wrong here.
+      - name: Install rockygpt-data dependencies
+        run: npm ci
+        working-directory: rockygpt-data
+
+      - run: npm ci
+        working-directory: rockygpt-brain
+
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: rockygpt-brain
+
+      - name: Type check
+        run: npm run typecheck
+        working-directory: rockygpt-brain
+
+      - name: Lint
+        run: npm run lint
+        working-directory: rockygpt-brain
+
+      # A service that cannot start is a broken service, and neither typecheck
+      # nor lint catches a bad import that only resolves at runtime.
+      - name: Service starts and answers its health probe
+        working-directory: rockygpt-brain
+        env:
+          BRAIN_PORT: '8000'
+        run: |
+          npx tsx api/server.ts &
+          for _ in $(seq 1 20); do
+            if curl -sf localhost:8000/health >/dev/null; then
+              curl -s localhost:8000/health
+              kill %1
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "the brain never became healthy" >&2
+          kill %1 2>/dev/null || true
+          exit 1

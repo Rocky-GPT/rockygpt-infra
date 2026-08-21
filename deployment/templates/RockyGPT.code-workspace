@@ -1,0 +1,74 @@
+{
+  "folders": [
+    { "name": "🎨 UI", "path": "rockygpt-ui" },
+    { "name": "🧠 Brain", "path": "rockygpt-brain" },
+    { "name": "📚 Data", "path": "rockygpt-data" },
+    { "name": "🧪 Evals", "path": "rockygpt-evals" },
+    { "name": "☁️ Infra", "path": "rockygpt-infra" }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/node_modules": true,
+      "**/.next": true,
+      "**/*.tsbuildinfo": true
+    },
+    // Paths in a multi-root workspace are matched against each folder's own
+    // root, so these are written relative to a repository rather than to the
+    // workspace. A pattern that does not exist in a given repository simply
+    // never matches.
+    "search.exclude": {
+      "data/raw": true,
+      "data/normalized": true,
+      "data/context": true,
+      "data/cache": true,
+      "data/playwright": true,
+      "public/data": true,
+      "test-results": true,
+      "playwright-report": true,
+      "**/package-lock.json": true
+    },
+    "files.watcherExclude": {
+      "**/node_modules/**": true,
+      "**/.next/**": true,
+      "**/data/raw/**": true,
+      "**/data/normalized/**": true
+    },
+    // Each repository installs its own toolchain, so ESLint and TypeScript are
+    // resolved per folder rather than from one shared root.
+    "eslint.workingDirectories": [{ "mode": "auto" }],
+    "typescript.enablePromptUseWorkspaceTsdk": true,
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.codeActionsOnSave": {
+      "source.fixAll.eslint": "explicit"
+    },
+    "[json]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+    "[jsonc]": { "editor.defaultFormatter": "esbenp.prettier-vscode" }
+  },
+  "extensions": {
+    "recommendations": [
+      "dbaeumer.vscode-eslint",
+      "esbenp.prettier-vscode",
+      "bradlc.vscode-tailwindcss",
+      "ms-azuretools.vscode-docker"
+    ]
+  },
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [],
+    // The product is two processes. Starting them separately and forgetting
+    // the brain is the most common way to see the app answer 503, so the
+    // default here starts both in the right order.
+    "compounds": [
+      {
+        "name": "▶ RockyGPT (brain + UI)",
+        "configurations": [
+          { "folder": "🧠 Brain", "name": "Brain: debug service" },
+          { "folder": "🎨 UI", "name": "Next.js: Debug Server-side" }
+        ],
+        "stopAll": true,
+        "presentation": { "group": "rockygpt", "order": 1 }
+      }
+    ]
+  }
+}

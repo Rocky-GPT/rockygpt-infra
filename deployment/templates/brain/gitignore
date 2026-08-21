@@ -1,0 +1,20 @@
+# dependencies
+/node_modules
+
+# env files
+.env*
+!.env.example
+
+# misc
+.DS_Store
+__pycache__/
+*.pyc
+
+# debug
+npm-debug.log*
+
+# typescript
+*.tsbuildinfo
+
+# Build output, produced by npm run build and shipped by npm publish
+/dist/

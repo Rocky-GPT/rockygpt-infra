@@ -1,0 +1,19 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Brain: debug service",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Brain: debug one eval turn",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npx tsx --inspect-brk api/server.ts",
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

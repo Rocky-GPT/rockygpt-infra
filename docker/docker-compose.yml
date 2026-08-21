@@ -1,0 +1,52 @@
+# Local RockyGPT: Postgres, the brain service, and the web app.
+#
+# Mirrors the deployed topology — the browser only ever reaches the ui, and the
+# ui reaches the brain over the network rather than importing it.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: rockygpt
+      POSTGRES_PASSWORD: rockygpt
+      POSTGRES_DB: rockygpt
+    ports:
+      - '5432:5432'
+    volumes:
+      - rockygpt-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U rockygpt']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  brain:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.brain
+    environment:
+      DATABASE_URL: postgres://rockygpt:rockygpt@postgres:5432/rockygpt
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:-}
+      ROCKY_DATA_ROOT: /srv/data
+    ports:
+      - '8000:8000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  ui:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.ui
+    environment:
+      DATABASE_URL: postgres://rockygpt:rockygpt@postgres:5432/rockygpt
+      BRAIN_URL: http://brain:8000
+      ROCKY_DATA_ROOT: /srv/data
+    ports:
+      - '3000:3000'
+    depends_on:
+      - brain
+
+volumes:
+  rockygpt-pgdata:

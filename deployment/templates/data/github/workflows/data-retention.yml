@@ -1,0 +1,29 @@
+name: Data Retention
+
+on:
+  schedule:
+    - cron: '30 8 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: data-retention
+  cancel-in-progress: false
+
+jobs:
+  retain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Delete expired telemetry and old dataset payloads
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run maintenance:data-retention

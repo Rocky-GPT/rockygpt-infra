@@ -1,0 +1,30 @@
+# dependencies
+/node_modules
+
+# env files
+.env*
+!.env.example
+
+# misc
+.DS_Store
+__pycache__/
+*.pyc
+
+# debug
+npm-debug.log*
+
+# typescript
+*.tsbuildinfo
+
+# next.js
+/.next/
+/out/
+/build/
+next-env.d.ts
+
+# playwright
+/test-results/
+/playwright-report/
+
+# Published by the data pipeline (ROCKY_PUBLIC_DIR), not authored here.
+/public/data/

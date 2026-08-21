@@ -1,0 +1,39 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Data: quality gate",
+      "type": "shell",
+      "command": "npm run data:quality",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": { "kind": "test", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Data: publish to the web app",
+      "detail": "Writes browser-fetchable JSON into the sibling ui checkout.",
+      "type": "shell",
+      "command": "ROCKY_PUBLIC_DIR=../rockygpt-ui/public npm run data:publish",
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Data: restore active release",
+      "type": "shell",
+      "command": "npm run data:bootstrap",
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Data: refresh daily sources",
+      "type": "shell",
+      "command": "npm run refresh:daily",
+      "options": { "cwd": "${workspaceFolder}" },
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    }
+  ]
+}
