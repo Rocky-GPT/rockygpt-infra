@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 #
-# Builds the five standalone RockyGPT repositories from this monorepo.
+# Built the five standalone RockyGPT repositories from this monorepo.
+#
+# THE SPLIT IS DONE. The five repositories under the Rocky-GPT organisation are
+# the project now, and this script is kept as the record of how they were made
+# rather than as something to run again.
+#
+# Running it rebuilds each target from scratch and force-pushes, so against the
+# live repositories it would discard whatever has been committed to them since
+# the split. That is why it refuses by default.
 #
 # Each target starts fresh: one initial commit, no imported history. The
 # monorepo remains the historical record, and these repositories are the
@@ -13,6 +21,21 @@
 # Destination defaults to ~/Projects/RockyGPT.
 
 set -euo pipefail
+
+if [ "${ROCKYGPT_ALLOW_RESPLIT:-}" != "1" ]; then
+  cat >&2 <<'REFUSED'
+refusing to re-split: the five repositories are the source of truth now.
+
+Rebuilding them from this monorepo would discard anything committed to them
+directly, which is where the work happens. Edit the repositories instead:
+
+  ~/Projects/RockyGPT/rockygpt-{ui,brain,data,evals,infra}
+
+Set ROCKYGPT_ALLOW_RESPLIT=1 only to recreate the split from scratch, knowing
+it overwrites the published history of all five.
+REFUSED
+  exit 1
+fi
 
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DEST="${1:-$HOME/Projects/RockyGPT}"
