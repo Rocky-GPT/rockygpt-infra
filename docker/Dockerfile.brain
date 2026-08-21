@@ -1,0 +1,23 @@
+# The answering engine, served over HTTP.
+FROM node:22-slim AS base
+WORKDIR /srv
+
+# The brain reads campus data through @rockygpt/data, so both packages are
+# installed together. ROCKY_DATA_ROOT points at wherever the artifacts land.
+COPY package*.json ./
+COPY brain/package.json ./brain/
+COPY data/package.json ./data/
+RUN npm ci --omit=dev --workspace @rockygpt/brain --include-workspace-root
+
+COPY brain ./brain
+COPY data ./data
+
+ENV NODE_ENV=production
+ENV BRAIN_HOST=0.0.0.0
+ENV BRAIN_PORT=8000
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s \
+  CMD node -e "fetch('http://127.0.0.1:8000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+CMD ["npx", "tsx", "brain/api/server.ts"]

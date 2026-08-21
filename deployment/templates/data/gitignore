@@ -1,0 +1,42 @@
+# dependencies
+/node_modules
+
+# env files
+.env*
+!.env.example
+
+# misc
+.DS_Store
+__pycache__/
+*.pyc
+
+# debug
+npm-debug.log*
+
+# typescript
+*.tsbuildinfo
+
+# Reconstructible campus data. PostgreSQL is the runtime store and private R2
+# holds immutable raw bundles; these are rebuilt by the publication pipeline
+# or restored with `npm run data:bootstrap`.
+/data/raw/
+/data/normalized/
+/data/context/
+/data/cache/
+/data/logs/
+/data/.cache/
+/data/playwright/
+/data/capability-test-results.json
+/data/capability-test-questions.json
+/data/slang-test-results.json
+/data/*.backup-*/
+
+**/browser-profile/
+**/playwright-profile/
+**/Cookies
+**/Login Data
+**/Local Storage/
+**/Session Storage/
+
+# Build output, produced by npm run build and shipped by npm publish
+/dist/

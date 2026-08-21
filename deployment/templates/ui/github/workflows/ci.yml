@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      # The app resolves @rockygpt/brain and @rockygpt/data as sibling
+      # directories, and next.config.ts points Turbopack one level up to find
+      # them. CI reproduces that layout; a lone checkout would fail to build.
+      - uses: actions/checkout@v7
+        with:
+          path: rockygpt-ui
+
+      - uses: actions/checkout@v7
+        with:
+          repository: Rocky-GPT/rockygpt-brain
+          path: rockygpt-brain
+
+      - uses: actions/checkout@v7
+        with:
+          repository: Rocky-GPT/rockygpt-data
+          path: rockygpt-data
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: rockygpt-ui/package-lock.json
+
+      # Sibling checkouts need their own dependencies. This repository
+      # typechecks their sources through tsconfig paths, so a sibling without
+      # node_modules fails on the packages it imports — pg, for one — rather
+      # than on anything wrong here.
+      - name: Install rockygpt-data dependencies
+        run: npm ci
+        working-directory: rockygpt-data
+
+      - name: Install rockygpt-brain dependencies
+        run: npm ci
+        working-directory: rockygpt-brain
+
+      - run: npm ci
+        working-directory: rockygpt-ui
+
+      # High-severity production advisories block the build. Transitive pins
+      # live in "overrides" rather than `npm audit fix`, which would pull a
+      # Next major.
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=high
+        working-directory: rockygpt-ui
+
+      - name: Type check
+        run: npm run typecheck
+        working-directory: rockygpt-ui
+
+      - name: Lint
+        run: npm run lint
+        working-directory: rockygpt-ui
+
+      - name: Production build
+        run: npm run build
+        working-directory: rockygpt-ui
+
+  accessibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: rockygpt-ui
+      - uses: actions/checkout@v7
+        with:
+          repository: Rocky-GPT/rockygpt-brain
+          path: rockygpt-brain
+      - uses: actions/checkout@v7
+        with:
+          repository: Rocky-GPT/rockygpt-data
+          path: rockygpt-data
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: rockygpt-ui/package-lock.json
+
+      # Sibling checkouts need their own dependencies. This repository
+      # typechecks their sources through tsconfig paths, so a sibling without
+      # node_modules fails on the packages it imports — pg, for one — rather
+      # than on anything wrong here.
+      - name: Install rockygpt-data dependencies
+        run: npm ci
+        working-directory: rockygpt-data
+
+      - name: Install rockygpt-brain dependencies
+        run: npm ci
+        working-directory: rockygpt-brain
+
+      - run: npm ci
+        working-directory: rockygpt-ui
+
+      - run: npx playwright install chromium
+        working-directory: rockygpt-ui
+
+      # The suite drives the rendered page, not the brain, so it runs without
+      # the service. Chat itself answers 503 here, which these checks do not
+      # assert on.
+      - name: Accessibility tests
+        run: npm run test:a11y
+        working-directory: rockygpt-ui

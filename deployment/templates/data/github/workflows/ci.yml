@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # data sits at the bottom of the dependency graph and imports nothing
+      # from the other repositories, so it builds from a lone checkout.
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # High-severity production advisories block the build. This runs first,
+      # so keep it first: a failure here skips everything below it.
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
