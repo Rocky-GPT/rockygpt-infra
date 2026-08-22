@@ -25,7 +25,13 @@ they run:
 ## Local stack
 
     cd docker
-    OPENAI_API_KEY=... docker compose up --build
+    cp .env.example .env      # set OPENAI_API_KEY
+    docker compose up --build
+
+The key is read to interpolate the stack rather than only to start it, so it
+has to be present for every compose command — `ps` and `logs` included. A
+`.env` beside the compose file is picked up automatically and saves passing it
+each time.
 
 Postgres, the data service on :8100, the brain on :8000, and the web app on
 :3000, in the same topology as production: a browser reaches the web app, and
