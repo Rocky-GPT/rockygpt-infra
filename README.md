@@ -12,15 +12,10 @@ RockyGPT is five separate repositories, not one project in folders:
     rockygpt-evals   answer-quality suites
     rockygpt-infra   this one
 
-They are separate on purpose. Each is meant to be replaceable on its own —
-the brain is expected to be rewritten in another language — so the contracts
-between them are HTTP and the PostgreSQL schema, never shared source.
-
-Where they do depend on each other today, it is a git dependency pinned to a
-commit. Changing `rockygpt-data` therefore does not reach its consumers until
-they run:
-
-    npm update @rockygpt/data
+They are separate on purpose. Each application builds from its own checkout.
+Runtime collaboration happens through versioned HTTP endpoints, never sibling
+source imports. Data and brain each own their PostgreSQL schema; UI and evals do
+not connect to PostgreSQL.
 
 ## Local stack
 
@@ -38,12 +33,11 @@ Postgres, the data service on :8100, the brain on :8000, and the web app on
 the web app reaches the brain over the network rather than importing it.
 
 Each image builds from its own repository, which must be checked out beside
-this one. There is no shared root to build from and no workspace to install
-from — the packages reach each other as ordinary dependencies, fetched from
-GitHub during the build.
+this one. There is no shared root, workspace install, or cross-repository npm
+dependency.
 
-A one-shot `schema` service creates the tables and exits; the others wait for
-it, so a first run against an empty volume does not race an empty database.
+A one-shot `schema` service creates the campus-data tables and exits. Brain
+creates its isolated persistence schema when it first needs it.
 
 That leaves the schema without any campus data in it. The stack starts, and
 every lookup finds nothing, because a release is published rather than seeded.

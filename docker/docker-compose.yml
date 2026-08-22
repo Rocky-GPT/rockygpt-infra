@@ -63,25 +63,25 @@ services:
       DATABASE_URL: postgres://rockygpt:rockygpt@postgres:5432/rockygpt
       OPENAI_API_KEY: ${OPENAI_API_KEY:?set OPENAI_API_KEY before starting the stack}
       OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:-}
+      CHAT_LOG_HASH_KEY: ${CHAT_LOG_HASH_KEY:?set CHAT_LOG_HASH_KEY before starting the stack}
+      ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:?set ADMIN_API_TOKEN before starting the stack}
+      DATA_URL: http://data:8100
     ports:
       - '8000:8000'
     depends_on:
       schema:
         condition: service_completed_successfully
+      data:
+        condition: service_started
 
   ui:
     build:
       context: ../../rockygpt-ui
       dockerfile: ../rockygpt-infra/docker/Dockerfile.ui
-      args:
-        # Baked into the browser bundle at build time, so this is the address
-        # a browser on the host will use — the published port, not the name of
-        # a service on this network, which only resolves between containers.
-        NEXT_PUBLIC_DATA_URL: http://localhost:8100
     environment:
-      DATABASE_URL: postgres://rockygpt:rockygpt@postgres:5432/rockygpt
-      # Server-side, so this one is the service name.
       BRAIN_URL: http://brain:8000
+      DATA_URL: http://data:8100
+      ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:?set ADMIN_API_TOKEN before starting the stack}
     ports:
       - '3000:3000'
     depends_on:

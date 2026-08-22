@@ -9,15 +9,6 @@
 FROM node:22-slim AS tooling
 WORKDIR /srv
 
-# Dependencies are fetched from GitHub with git, which the slim image does not
-# ship. The lockfile records ssh:// URLs and a container holds no keys, so git
-# is pointed at the same public repositories over https instead.
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends git ca-certificates \
-  && rm -rf /var/lib/apt/lists/* \
-  && git config --global url."https://github.com/".insteadOf "git@github.com:" \
-  && git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
-
 # The whole repository is copied before installing, rather than the manifests
 # alone. Installing runs this package's own `prepare`, and `prepare` compiles
 # it, so the tsconfig and the sources must already be here — with only the
@@ -28,8 +19,8 @@ COPY . .
 # not to. Nothing served here drives a browser; the scrapers that do are
 # scheduled work rather than part of this service.
 #
-# devDependencies are needed by the install itself: `prepare` runs for this
-# package and every git dependency, and each compiles with TypeScript. It also
+# devDependencies are needed by the install itself: `prepare` compiles this
+# package with TypeScript. It also
 # runs build:assets, which copies the schema, its migrations, and the reference
 # JSON into dist — without that every packageAsset lookup resolves to a file
 # that was never emitted.
