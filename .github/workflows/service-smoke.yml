@@ -2,12 +2,19 @@ name: Service Smoke
 
 on:
   workflow_dispatch:
+    inputs:
+      environment:
+        required: true
+        type: choice
+        options: [staging, production]
+        default: staging
 
 permissions:
   contents: read
 
 jobs:
   smoke:
+    environment: ${{ inputs.environment }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -20,4 +27,6 @@ jobs:
           UI_URL: ${{ secrets.UI_URL }}
           BRAIN_URL: ${{ secrets.BRAIN_URL }}
           DATA_URL: ${{ secrets.DATA_URL }}
+          STAGING_SERVICE_TOKEN: ${{ secrets.STAGING_SERVICE_TOKEN }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: node tests/service-smoke.mjs
