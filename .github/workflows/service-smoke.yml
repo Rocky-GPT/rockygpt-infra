@@ -1,0 +1,23 @@
+name: Service Smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Verify deployed service topology
+        env:
+          UI_URL: ${{ secrets.UI_URL }}
+          BRAIN_URL: ${{ secrets.BRAIN_URL }}
+          DATA_URL: ${{ secrets.DATA_URL }}
+        run: node tests/service-smoke.mjs

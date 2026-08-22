@@ -69,6 +69,8 @@ live in the brain repository that owns the helper.
   those legacy tables.
 - Evals have no database driver, model SDK, or application package dependency.
 - Each application CI checks out and installs only its own repository.
+- Database grants enforce the schema boundary in the local stack; production
+  deployments must provision separate credentials with equivalent grants.
 
 ## Compatibility baseline
 
