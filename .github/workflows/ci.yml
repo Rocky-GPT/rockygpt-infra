@@ -33,7 +33,21 @@ jobs:
           exit $status
 
       - name: Compose file is valid
+        env:
+          OPENAI_API_KEY: ci-placeholder
+          CHAT_LOG_HASH_KEY: ci-placeholder
+          ABUSE_HASH_KEY: ci-placeholder-ci-placeholder-1234
+          ADMIN_API_TOKEN: ci-placeholder
         run: docker compose -f docker/docker-compose.yml config --quiet
+
+      - name: Database roles stay isolated
+        run: |
+          grep -Fq 'rockygpt_data:rockygpt_data@postgres' docker/docker-compose.yml
+          grep -Fq 'rockygpt_brain:rockygpt_brain@postgres' docker/docker-compose.yml
+          if grep -Fq 'postgres://rockygpt:rockygpt@postgres' docker/docker-compose.yml; then
+            echo 'shared application database credential returned' >&2
+            exit 1
+          fi
 
       - name: Editor and package templates parse
         run: |

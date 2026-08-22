@@ -13,15 +13,16 @@ services:
   postgres:
     image: postgres:17-alpine
     environment:
-      POSTGRES_USER: rockygpt
-      POSTGRES_PASSWORD: rockygpt
+      POSTGRES_USER: rockygpt_admin
+      POSTGRES_PASSWORD: rockygpt_admin
       POSTGRES_DB: rockygpt
     ports:
-      - '5432:5432'
+      - '127.0.0.1:5432:5432'
     volumes:
       - rockygpt-pgdata:/var/lib/postgresql/data
+      - ./postgres-init.sql:/docker-entrypoint-initdb.d/10-rockygpt-roles.sql:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U rockygpt']
+      test: ['CMD-SHELL', 'pg_isready -U rockygpt_admin -d rockygpt']
       interval: 5s
       timeout: 3s
       retries: 10
@@ -36,7 +37,7 @@ services:
       target: tooling
     command: npm run data:schema
     environment:
-      DATABASE_URL: postgres://rockygpt:rockygpt@postgres:5432/rockygpt
+      DATABASE_URL: postgres://rockygpt_data:rockygpt_data@postgres:5432/rockygpt
     depends_on:
       postgres:
         condition: service_healthy
@@ -48,9 +49,17 @@ services:
       dockerfile: ../rockygpt-infra/docker/Dockerfile.data
       target: runtime
     environment:
-      DATABASE_URL: postgres://rockygpt:rockygpt@postgres:5432/rockygpt
+      DATABASE_URL: postgres://rockygpt_data:rockygpt_data@postgres:5432/rockygpt
     ports:
-      - '8100:8100'
+      - '127.0.0.1:8100:8100'
+    # The local database is intentionally empty until data:bootstrap runs.
+    # Wait for HTTP liveness here; the image's default readiness probe remains
+    # appropriate for a production orchestrator with an active release.
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:8100/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     depends_on:
       schema:
         condition: service_completed_successfully
@@ -60,19 +69,25 @@ services:
       context: ../../rockygpt-brain
       dockerfile: ../rockygpt-infra/docker/Dockerfile.brain
     environment:
-      DATABASE_URL: postgres://rockygpt:rockygpt@postgres:5432/rockygpt
+      DATABASE_URL: postgres://rockygpt_brain:rockygpt_brain@postgres:5432/rockygpt
       OPENAI_API_KEY: ${OPENAI_API_KEY:?set OPENAI_API_KEY before starting the stack}
       OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:-}
       CHAT_LOG_HASH_KEY: ${CHAT_LOG_HASH_KEY:?set CHAT_LOG_HASH_KEY before starting the stack}
+      ABUSE_HASH_KEY: ${ABUSE_HASH_KEY:?set ABUSE_HASH_KEY before starting the stack}
       ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:?set ADMIN_API_TOKEN before starting the stack}
       DATA_URL: http://data:8100
     ports:
-      - '8000:8000'
+      - '127.0.0.1:8000:8000'
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:8000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     depends_on:
       schema:
         condition: service_completed_successfully
       data:
-        condition: service_started
+        condition: service_healthy
 
   ui:
     build:
@@ -82,11 +97,17 @@ services:
       BRAIN_URL: http://brain:8000
       DATA_URL: http://data:8100
       ADMIN_API_TOKEN: ${ADMIN_API_TOKEN:?set ADMIN_API_TOKEN before starting the stack}
+      ABUSE_HASH_KEY: ${ABUSE_HASH_KEY:?set ABUSE_HASH_KEY before starting the stack}
     ports:
-      - '3000:3000'
+      - '127.0.0.1:3000:3000'
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     depends_on:
       brain:
-        condition: service_started
+        condition: service_healthy
 
 volumes:
   rockygpt-pgdata:
