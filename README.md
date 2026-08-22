@@ -27,9 +27,26 @@ they run:
     cd docker
     OPENAI_API_KEY=... docker compose up --build
 
-Postgres, the brain on :8000, and the web app on :3000, in the same topology
-as production: a browser only reaches the web app, and the web app reaches the
-brain over the network rather than importing it.
+Postgres, the data service on :8100, the brain on :8000, and the web app on
+:3000, in the same topology as production: a browser reaches the web app, and
+the web app reaches the brain over the network rather than importing it.
+
+Each image builds from its own repository, which must be checked out beside
+this one. There is no shared root to build from and no workspace to install
+from — the packages reach each other as ordinary dependencies, fetched from
+GitHub during the build.
+
+A one-shot `schema` service creates the tables and exits; the others wait for
+it, so a first run against an empty volume does not race an empty database.
+
+That leaves the schema without any campus data in it. The stack starts, and
+every lookup finds nothing, because a release is published rather than seeded.
+To fill it, run the pipeline against the same database from `rockygpt-data`:
+
+    DATABASE_URL=postgres://rockygpt:rockygpt@localhost:5432/rockygpt \
+      npm run data:bootstrap
+
+which needs the `RAW_ARTIFACT_*` credentials that reach the archive.
 
 ## Layout
 
