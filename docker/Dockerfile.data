@@ -1,0 +1,62 @@
+# Campus data, served over HTTP.
+#
+# Two things are built here from one repository. The `runtime` stage is the
+# service: compiled output only, devDependencies pruned away. The `tooling`
+# stage keeps the source and tsx, because the pipeline commands are not part
+# of the published build — tsconfig.build.json compiles src and api, not
+# pipeline — and the schema still has to be applied from somewhere.
+
+FROM node:22-slim AS deps
+WORKDIR /srv
+
+# Dependencies are fetched from GitHub with git, which the slim image does not
+# ship. The lockfile records ssh:// URLs and a container holds no keys, so git
+# is pointed at the same public repositories over https instead.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends git ca-certificates \
+  && rm -rf /var/lib/apt/lists/* \
+  && git config --global url."https://github.com/".insteadOf "git@github.com:" \
+  && git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
+
+COPY package.json package-lock.json ./
+
+# devDependencies are needed at install time, not just for tests: npm runs
+# `prepare` for this package and for every git dependency, and `prepare`
+# compiles with TypeScript. Installing without them fails on a missing tsc —
+# the same trap render.yaml documents for the deployed build.
+#
+# Playwright is a devDependency and fetches a browser on install unless told
+# not to. Nothing served here drives a browser; the scrapers that do are
+# scheduled work rather than part of this service.
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+RUN npm ci --include=dev
+
+# Source, devDependencies, and tsx. This is what the pipeline commands need.
+# `build` also runs build:assets, which copies the schema, its migrations, and
+# the reference JSON into dist — without it every packageAsset lookup resolves
+# to a file that was never emitted.
+FROM deps AS tooling
+COPY . .
+RUN npm run build
+
+FROM tooling AS pruned
+RUN npm prune --omit=dev
+
+FROM node:22-slim AS runtime
+WORKDIR /srv
+ENV NODE_ENV=production
+
+COPY --from=pruned /srv/node_modules ./node_modules
+COPY --from=pruned /srv/dist ./dist
+COPY --from=pruned /srv/package.json ./package.json
+
+# The server treats the presence of PORT as the signal to bind every interface.
+# Binding loopback would answer from inside the container and fail every
+# healthcheck reaching it from outside.
+ENV PORT=8100
+EXPOSE 8100
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=20s --retries=5 \
+  CMD node -e "fetch('http://127.0.0.1:8100/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+CMD ["npm", "start"]

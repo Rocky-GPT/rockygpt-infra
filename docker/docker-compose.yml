@@ -1,7 +1,13 @@
-# Local RockyGPT: Postgres, the brain service, and the web app.
+# Local RockyGPT: Postgres, the data service, the brain, and the web app.
 #
-# Mirrors the deployed topology — the browser only ever reaches the ui, and the
-# ui reaches the brain over the network rather than importing it.
+# Mirrors the deployed topology — a browser reaches the web app, and the web
+# app reaches the brain over the network rather than importing it.
+#
+# Each image builds from its own repository. The repositories are siblings of
+# this one, which is why every context climbs two levels; nothing is built
+# from a shared root, because there is no longer one.
+
+name: rockygpt
 
 services:
   postgres:
@@ -20,33 +26,67 @@ services:
       timeout: 3s
       retries: 10
 
-  brain:
+  # One-shot. Creates the schema, then exits. Everything else waits for it to
+  # exit successfully, so a first `up` on an empty volume does not race the
+  # services against an empty database.
+  schema:
     build:
-      context: ../..
-      dockerfile: infra/docker/Dockerfile.brain
+      context: ../../rockygpt-data
+      dockerfile: ../rockygpt-infra/docker/Dockerfile.data
+      target: tooling
+    command: npm run data:schema
     environment:
       DATABASE_URL: postgres://rockygpt:rockygpt@postgres:5432/rockygpt
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:-}
-      ROCKY_DATA_ROOT: /srv/data
-    ports:
-      - '8000:8000'
     depends_on:
       postgres:
         condition: service_healthy
+    restart: 'no'
+
+  data:
+    build:
+      context: ../../rockygpt-data
+      dockerfile: ../rockygpt-infra/docker/Dockerfile.data
+      target: runtime
+    environment:
+      DATABASE_URL: postgres://rockygpt:rockygpt@postgres:5432/rockygpt
+    ports:
+      - '8100:8100'
+    depends_on:
+      schema:
+        condition: service_completed_successfully
+
+  brain:
+    build:
+      context: ../../rockygpt-brain
+      dockerfile: ../rockygpt-infra/docker/Dockerfile.brain
+    environment:
+      DATABASE_URL: postgres://rockygpt:rockygpt@postgres:5432/rockygpt
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?set OPENAI_API_KEY before starting the stack}
+      OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:-}
+    ports:
+      - '8000:8000'
+    depends_on:
+      schema:
+        condition: service_completed_successfully
 
   ui:
     build:
-      context: ../..
-      dockerfile: infra/docker/Dockerfile.ui
+      context: ../../rockygpt-ui
+      dockerfile: ../rockygpt-infra/docker/Dockerfile.ui
+      args:
+        # Baked into the browser bundle at build time, so this is the address
+        # a browser on the host will use — the published port, not the name of
+        # a service on this network, which only resolves between containers.
+        NEXT_PUBLIC_DATA_URL: http://localhost:8100
     environment:
       DATABASE_URL: postgres://rockygpt:rockygpt@postgres:5432/rockygpt
+      # Server-side, so this one is the service name.
       BRAIN_URL: http://brain:8000
-      ROCKY_DATA_ROOT: /srv/data
     ports:
       - '3000:3000'
     depends_on:
-      - brain
+      brain:
+        condition: service_started
 
 volumes:
   rockygpt-pgdata:
