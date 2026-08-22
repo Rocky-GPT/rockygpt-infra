@@ -16,16 +16,19 @@ RUN apt-get update \
   && git config --global url."https://github.com/".insteadOf "git@github.com:" \
   && git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
 
-COPY package.json package-lock.json ./
-
-# devDependencies are needed at install time, not just for tests: npm runs
-# `prepare` for this package and for every git dependency, and `prepare`
-# compiles with TypeScript. Installing without them fails on a missing tsc —
-# the same trap render.yaml documents for the deployed build.
-RUN npm ci --include=dev
-
+# The whole repository is copied before installing, rather than the manifests
+# alone. Installing runs this package's own `prepare`, and `prepare` compiles
+# it, so tsconfig.build.json and src must already be here — with only the
+# manifests, tsc exits on a config file that does not exist yet. It costs the
+# usual dependency layer caching, which is worth less than an install that
+# works.
 COPY . .
-RUN npm run build && npm prune --omit=dev
+
+# devDependencies are needed by that same install, not just by tests: `prepare`
+# runs for this package and for every git dependency, and each one compiles
+# with TypeScript. Installing without them fails on a missing tsc — the trap
+# render.yaml documents for the deployed build.
+RUN npm ci --include=dev && npm prune --omit=dev
 
 FROM node:22-slim AS runtime
 WORKDIR /srv

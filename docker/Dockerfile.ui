@@ -9,13 +9,13 @@ RUN apt-get update \
   && git config --global url."https://github.com/".insteadOf "git@github.com:" \
   && git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
 
-COPY package.json package-lock.json ./
+# Copied before installing because the git dependencies compile themselves
+# during `prepare`, and the app is built from these same sources a step later.
+COPY . .
 
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm ci --include=dev
-
-COPY . .
 
 # NEXT_PUBLIC_ values are inlined into the browser bundle when the app is
 # built, not read when it runs, so the data service's address has to be known
