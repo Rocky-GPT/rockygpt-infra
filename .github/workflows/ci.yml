@@ -2,9 +2,9 @@ name: CI
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, staging]
   push:
-    branches: [main]
+    branches: [main, staging]
 
 jobs:
   check:
@@ -48,6 +48,17 @@ jobs:
             echo 'shared application database credential returned' >&2
             exit 1
           fi
+
+      - name: Exercise database permission boundaries
+        env:
+          OPENAI_API_KEY: ci-placeholder
+          CHAT_LOG_HASH_KEY: ci-placeholder
+          ABUSE_HASH_KEY: ci-placeholder-ci-placeholder-1234
+          ADMIN_API_TOKEN: ci-placeholder
+        run: |
+          docker compose -f docker/docker-compose.yml up -d postgres
+          docker compose -f docker/docker-compose.yml exec -T postgres psql -U rockygpt_admin -d rockygpt -f /docker-entrypoint-initdb.d/10-rockygpt-roles.sql
+          docker compose -f docker/docker-compose.yml exec -T postgres psql -U rockygpt_admin -d rockygpt < docker/verify-role-isolation.sql
 
       - name: Editor and package templates parse
         run: |
