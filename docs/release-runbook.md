@@ -4,10 +4,20 @@
 
 Development happens on `dev` across repositories. Merges into `main` automatically deploy production services:
 - **UI**: Vercel production deployment (`rockygpt.vercel.app`)
-- **Brain**: Render Python service (`rockygpt-brain.onrender.com`)
-- **Data**: Render Node.js service (`rockygpt-data.onrender.com`)
+- **Brain**: Render Python service (`rockygpt-brain.onrender.com`) — serves campus data as well as answers
+- **Data**: retired 2026-08-28. `rockygpt-data` no longer exists on Render; the repository is kept for its ingestion tooling only.
 
-Free Render services sleep when idle. A first request may take roughly a minute; automation allows 90 seconds. Do not add synthetic keep-warm traffic.
+Free Render services sleep after 15 minutes idle, and a first request then takes roughly a minute; automation still allows 90 seconds for anything that may hit a cold instance.
+
+The brain is deliberately kept awake. An UptimeRobot monitor (`RockyGPT brain (keep-warm)`) requests `https://rockygpt-brain.onrender.com/health` every 5 minutes so visitors never pay the cold start. This reverses the previous rule against synthetic keep-warm traffic, and it is affordable only within a budget worth stating explicitly:
+
+- Render grants **750 free instance hours per calendar month per workspace**, not per service. Exhausting the pool suspends *every* free service until the 1st.
+- Hours accrue only while a service is awake. Ping frequency is irrelevant to cost — a 5-minute and a 14-minute interval bill identically; only hours-awake matter.
+- The brain awake continuously costs 744 h in a 31-day month, against a 750 h pool. The margin is under 1%, so a second continuously-awake free service does not fit.
+
+This is why `rockygpt-data` was retired rather than left idle: a second free service that anything wakes on a schedule does not fit alongside a continuously-awake brain. Keep the workspace to one continuously-awake free service.
+
+Because the monitor treats any non-2xx as an outage, and free-plan monitors send `HEAD` with no way to change the method, any endpoint a monitor points at must answer `HEAD` as well as `GET`. `/health` does; `/readiness` and `/readiness/chat-logs` do not, and would report a false outage if pointed at today.
 
 ## Promotion and Deployment
 
@@ -15,6 +25,19 @@ Free Render services sleep when idle. A first request may take roughly a minute;
 2. Run local and CI test suites (`pytest`, `typecheck`, `lint`, and Playwright suites).
 3. Merge `dev` into `main` in dependency order: **data, brain, UI**.
 4. After production deployment, verify service health using the `Service Smoke` workflow or local runner. The scheduled production monitor repeats the check every six hours.
+
+### Retiring `rockygpt-data` (completed 2026-08-28)
+
+Kept as a worked example, because the near-miss is the instructive part: a merge into `main` is not a deployment until it is **pushed**, and for most of this migration the working tree was two commits ahead of production in both repos. Confirm what production actually runs before acting on what the working tree says:
+
+```
+curl -s -o /dev/null -w '%{http_code}\n' https://rockygpt-brain.onrender.com/v1/map
+curl -s -o /dev/null -w '%{http_code}\n' https://rockygpt.vercel.app/api/map
+```
+
+A 404 from the brain with a 200 from the UI means the UI is still being served by `rockygpt-data`, and removing that service would take every campus-data panel down with it. The order followed was: push brain `main`, confirm `/v1/map` answers 200, push UI `main`, confirm `/api/map` still answers 200, then delete the service.
+
+`DATA_URL` was dropped from `tests/service-smoke.mjs` in the same change. Leaving it in is what would have turned a deliberate retirement into a recurring production-monitor incident every six hours. The `DATA_URL` secret itself is now unused in GitHub Actions and Vercel and can be removed; `rockygpt-data/render.yaml` describes a service that no longer exists.
 
 ## API compatibility and SDK releases
 

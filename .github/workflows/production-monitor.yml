@@ -17,7 +17,6 @@ jobs:
     env:
       UI_URL: ${{ secrets.UI_URL }}
       BRAIN_URL: ${{ secrets.BRAIN_URL }}
-      DATA_URL: ${{ secrets.DATA_URL }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
