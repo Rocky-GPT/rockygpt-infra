@@ -1,4 +1,4 @@
-const required = ['UI_URL', 'BRAIN_URL', 'DATA_URL'];
+const required = ['UI_URL', 'BRAIN_URL'];
 for (const name of required) {
   if (!process.env[name]?.trim()) throw new Error(`${name} is required.`);
 }
@@ -29,10 +29,12 @@ async function request(label, url, init, expected = 200) {
 
 await request('UI readiness', `${base('UI_URL')}/api/readiness`);
 await request('brain readiness', `${base('BRAIN_URL')}/readiness`);
-await request('data readiness', `${base('DATA_URL')}/readiness`);
 
-const directMap = await request('direct data map', `${base('DATA_URL')}/v1/map`);
-const proxiedMap = await request('UI data map proxy', `${base('UI_URL')}/api/map`);
+// Campus data is served by the brain. rockygpt-data was retired from Render on
+// 2026-08-28; probing it here is what would turn a deliberate retirement into a
+// recurring production-monitor incident.
+const directMap = await request('direct brain map', `${base('BRAIN_URL')}/v1/map`);
+const proxiedMap = await request('UI map proxy', `${base('UI_URL')}/api/map`);
 if (!Array.isArray(directMap.locations) || !Array.isArray(proxiedMap.locations)) {
   throw new Error('Map contract is missing locations.');
 }
