@@ -72,9 +72,8 @@ The `Service Smoke` workflow runs the same check with repository secrets. It
 checks readiness, the direct and UI-proxied map contract, and malformed chat
 handling without making a model call.
 
-Staging, promotion, SDK release, rollback, and incident procedures are in
-[`docs/release-runbook.md`](docs/release-runbook.md). Provisioning is recorded in
-[`docs/staging-bootstrap.md`](docs/staging-bootstrap.md), and the future native
+Deployment, SDK release, rollback, and incident procedures are in
+[`docs/release-runbook.md`](docs/release-runbook.md), and the future native
 security boundary is in [`docs/adr-native-client-security.md`](docs/adr-native-client-security.md).
 
 ## Layout
