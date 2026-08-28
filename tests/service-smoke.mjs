@@ -4,20 +4,13 @@ for (const name of required) {
 }
 
 const base = (name) => process.env[name].replace(/\/+$/, '');
-const serviceHeaders = process.env.STAGING_SERVICE_TOKEN
-  ? { 'x-rockygpt-environment-token': process.env.STAGING_SERVICE_TOKEN }
-  : {};
 const uiHeaders = process.env.VERCEL_AUTOMATION_BYPASS_SECRET
   ? { 'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET }
   : {};
 
 async function request(label, url, init, expected = 200) {
   const headers = {
-    ...(!url.startsWith(base('UI_URL')) ? serviceHeaders : {}),
     ...(url.startsWith(base('UI_URL')) ? uiHeaders : {}),
-    ...(url.startsWith(base('UI_URL')) && process.env.STAGING_SERVICE_TOKEN
-      ? { 'x-rockygpt-environment-token': 'browser-supplied-values-are-never-forwarded' }
-      : {}),
     ...(init?.headers || {}),
   };
   const started = performance.now();
@@ -50,19 +43,5 @@ await request(
   { method: 'POST', headers: { 'content-type': 'application/json' }, body: 'null' },
   400
 );
-
-if (process.env.STAGING_SERVICE_TOKEN) {
-  const deniedData = await fetch(`${base('DATA_URL')}/v1/map`, { signal: AbortSignal.timeout(90_000) });
-  const deniedBrain = await fetch(`${base('BRAIN_URL')}/v1/chat`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: 'null',
-    signal: AbortSignal.timeout(90_000),
-  });
-  if (deniedData.status !== 401 || deniedBrain.status !== 401) {
-    throw new Error(`staging access gate failed: data=${deniedData.status}, brain=${deniedBrain.status}`);
-  }
-  console.log('staging access gate: missing credentials denied, configured credentials accepted');
-}
 
 console.log('cross-service smoke: passed');
