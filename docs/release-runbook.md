@@ -9,7 +9,12 @@ Development happens on `dev` across repositories. Merges into `main` automatical
 
 Free Render services sleep after 15 minutes idle, and a first request then takes roughly a minute; automation still allows 90 seconds for anything that may hit a cold instance.
 
-The brain is deliberately kept awake. An UptimeRobot monitor (`RockyGPT brain (keep-warm)`) requests `https://rockygpt-brain.onrender.com/health` every 5 minutes so visitors never pay the cold start. This reverses the previous rule against synthetic keep-warm traffic, and it is affordable only within a budget worth stating explicitly:
+The brain is deliberately kept awake, by **two** things — check both before reasoning about cold starts or instance hours:
+
+- `rockygpt-brain/.github/workflows/chat-log-persistence.yml`, every 15 minutes. Its purpose is alerting on the chat-log store, but the cadence sits exactly on Render's idle threshold, so warming is a documented side effect. GitHub cron is best-effort and drifts late, so it warms unreliably.
+- An UptimeRobot monitor (`RockyGPT brain (keep-warm)`), `GET /health` every 5 minutes. Added 2026-08-28 for a dependable cadence and external alerting.
+
+Together these reverse the previous rule against synthetic keep-warm traffic. They are affordable only within a budget worth stating explicitly:
 
 - Render grants **750 free instance hours per calendar month per workspace**, not per service. Exhausting the pool suspends *every* free service until the 1st.
 - Hours accrue only while a service is awake. Ping frequency is irrelevant to cost — a 5-minute and a 14-minute interval bill identically; only hours-awake matter.
