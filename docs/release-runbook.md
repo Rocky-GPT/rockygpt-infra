@@ -28,7 +28,7 @@ Because the monitor treats any non-2xx as an outage, and free-plan monitors send
 
 1. Develop and verify changes on each repository's `dev` branch.
 2. Run local and CI test suites (`pytest`, `typecheck`, `lint`, and Playwright suites).
-3. Merge `dev` into `main` in dependency order: **data, brain, UI**.
+3. Merge `dev` into `main` in dependency order: **brain, then UI**. `rockygpt-data` no longer deploys; publishing a dataset is a pipeline run, not a release.
 4. After production deployment, verify service health using the `Service Smoke` workflow or local runner. The scheduled production monitor repeats the check every six hours.
 
 ### Retiring `rockygpt-data` (completed 2026-08-28)
@@ -42,13 +42,13 @@ curl -s -o /dev/null -w '%{http_code}\n' https://rockygpt.vercel.app/api/map
 
 A 404 from the brain with a 200 from the UI means the UI is still being served by `rockygpt-data`, and removing that service would take every campus-data panel down with it. The order followed was: push brain `main`, confirm `/v1/map` answers 200, push UI `main`, confirm `/api/map` still answers 200, then delete the service.
 
-`DATA_URL` was dropped from `tests/service-smoke.mjs` in the same change. Leaving it in is what would have turned a deliberate retirement into a recurring production-monitor incident every six hours. The `DATA_URL` secret itself is now unused in GitHub Actions and Vercel and can be removed; `rockygpt-data/render.yaml` describes a service that no longer exists.
+`DATA_URL` was dropped from `tests/service-smoke.mjs` in the same change. Leaving it in is what would have turned a deliberate retirement into a recurring production-monitor incident every six hours. `rockygpt-data/render.yaml` has since been deleted too, so no blueprint can recreate the service. The `DATA_URL` secret is still worth removing from GitHub Actions and Vercel, where it is now unused.
 
-## API compatibility and SDK releases
+## API compatibility
 
-OpenAPI is owned by the service repository. Additive changes increment its minor version. A breaking change requires a preserved `/v1` implementation, a new `/v2` path, and a major OpenAPI version. PR compatibility checks treat breaking errors as failures and report non-breaking warnings.
+The brain owns the only deployed HTTP contract, in `rockygpt-brain/spec/brain-api.openapi.yaml`. Additive changes increment its minor version. A breaking change requires a preserved `/v1` implementation, a new `/v2` path, and a major OpenAPI version.
 
-Tag an API release as `api-v1.1.0`; the tag version must exactly match `info.version`. The release workflow regenerates rather than commits clients, compiles TypeScript on Node 22, Swift on macOS, and Kotlin on Java 17, then attaches the spec and three SDK archives to the GitHub Release.
+There is no SDK release. The generator tooling and the `sdk-release` and `openapi-breaking` workflows were removed from `rockygpt-data` on 2026-08-28 along with the service they described; no client is generated or published from any spec today. Reinstating that would mean writing the workflow again deliberately.
 
 ## Database changes
 
@@ -56,6 +56,6 @@ Use additive migrations first: add nullable/defaulted columns or new tables, dep
 
 ## Secrets, incidents, rollback
 
-Rotate secrets in downstream-first order: data credentials, brain-to-data token, then UI keys. During a two-value rotation, deploy accepting services before callers, verify, then revoke the old value. Never expose `ABUSE_HASH_KEY`, database URLs, or model keys to browser or native code.
+Rotate secrets in downstream-first order: database credentials, then brain keys, then UI keys. During a two-value rotation, deploy accepting services before callers, verify, then revoke the old value. Never expose `ABUSE_HASH_KEY`, database URLs, or model keys to browser or native code.
 
 For rollback, restore the last verified data release, roll brain back to the last compatible commit, then roll UI back. Do not roll an API owner behind a caller that requires a newer contract. On monitor failure, use its incident issue as the timeline, link deployments and smoke runs, and close it only after the recovery smoke passes.

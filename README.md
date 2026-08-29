@@ -8,14 +8,15 @@ RockyGPT is five separate repositories, not one project in folders:
 
     rockygpt-ui      the web app
     rockygpt-brain   the answering engine, behind POST /v1/chat
-    rockygpt-data    campus data, behind its own HTTP service
+    rockygpt-data    campus ingestion and publication; deploys nothing
     rockygpt-evals   answer-quality suites
     rockygpt-infra   this one
 
 They are separate on purpose. Each application builds from its own checkout.
 Runtime collaboration happens through versioned HTTP endpoints, never sibling
 source imports. Data and brain each own their PostgreSQL schema; UI and evals do
-not connect to PostgreSQL.
+not connect to PostgreSQL. Only UI and brain are deployed — the brain serves the
+campus reads the web app used to take from a data service, straight from Neon.
 
 ## Local stack
 
@@ -28,10 +29,17 @@ has to be present for every compose command — `ps` and `logs` included. A
 `.env` beside the compose file is picked up automatically and saves passing it
 each time.
 
-Postgres, the data service on :8100, the brain on :8000, and the web app on
-:3000, in the same topology as production: a browser reaches the web app, and
-the web app reaches the brain over the network rather than importing it. Ports
-bind to loopback so the development stack is not exposed to the local network.
+Postgres, the brain on :8000, and the web app on :3000, in the same topology as
+production: a browser reaches the web app, and the web app reaches the brain over
+the network rather than importing it. Ports bind to loopback so the development
+stack is not exposed to the local network.
+
+**This stack does not currently come up.** `Dockerfile.brain` built the retired
+Node brain and was removed on 2026-08-28; nothing has replaced it, so the compose
+`brain` service has no image to build. `docker-compose.yml` also still defines the
+retired `data` service and passes a `DATA_URL` the brain ignores. Until that is
+settled, `../run-local.sh start` from the workspace root is the working local
+stack — it runs the brain and the web app against the configured database.
 
 Each image builds from its own repository, which must be checked out beside
 this one. There is no shared root, workspace install, or cross-repository npm
@@ -62,17 +70,21 @@ which needs the `RAW_ARTIFACT_*` credentials that reach the archive.
 
 ## Cross-service smoke
 
-After deploying all three services, verify the actual HTTP topology rather than
-only the individual processes:
+After deploying both services, verify the actual HTTP topology rather than only
+the individual processes:
 
-    UI_URL=https://… BRAIN_URL=https://… DATA_URL=https://… \
+    UI_URL=https://… BRAIN_URL=https://… \
       node tests/service-smoke.mjs
+
+Those two variables are the whole requirement, and deliberately so: the smoke
+test no longer probes a campus-data service. Adding one back is what would turn
+a deliberate retirement into a monitor incident every six hours.
 
 The `Service Smoke` workflow runs the same check with repository secrets. It
 checks readiness, the direct and UI-proxied map contract, and malformed chat
 handling without making a model call.
 
-Deployment, SDK release, rollback, and incident procedures are in
+Deployment, rollback, and incident procedures are in
 [`docs/release-runbook.md`](docs/release-runbook.md), and the future native
 security boundary is in [`docs/adr-native-client-security.md`](docs/adr-native-client-security.md).
 
