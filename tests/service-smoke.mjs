@@ -30,20 +30,13 @@ async function request(label, url, init, expected = 200) {
 await request('UI readiness', `${base('UI_URL')}/api/readiness`);
 await request('brain readiness', `${base('BRAIN_URL')}/readiness`);
 
-// Campus data is served by the brain. rockygpt-data was retired from Render on
-// 2026-08-28; probing it here is what would turn a deliberate retirement into a
-// recurring production-monitor incident.
-const directMap = await request('direct brain map', `${base('BRAIN_URL')}/v1/map`);
-const proxiedMap = await request('UI map proxy', `${base('UI_URL')}/api/map`);
-if (!Array.isArray(directMap.locations) || !Array.isArray(proxiedMap.locations)) {
-  throw new Error('Map contract is missing locations.');
-}
-
+// The first-principles Brain exposes chat and probes. Campus-panel endpoints
+// are outside this checkpoint's contract; this check makes no model calls.
 await request(
   'invalid brain chat request',
   `${base('BRAIN_URL')}/v1/chat`,
   { method: 'POST', headers: { 'content-type': 'application/json' }, body: 'null' },
-  400
+  422
 );
 
 console.log('cross-service smoke: passed');
