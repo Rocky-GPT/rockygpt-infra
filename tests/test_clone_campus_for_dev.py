@@ -120,6 +120,52 @@ class ArtifactBundleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Convener relationships"):
             LOADER.load_artifacts(None, self.root)
 
+    def add_event_organizer(self):
+        row = {"source_key": "archway-events", "source_record_key": "date:Meeting",
+               "source_record_id": "01d2cdd4-3245-4a49-a561-947f04f0972b",
+               "event_url": "https://archway.ramapo.edu/rsvp_boot?id=123",
+               "organizer_url": "https://archway.ramapo.edu/example/",
+               "collected_at": "2026-08-20T14:05:00Z",
+               "source_url": "https://archway.ramapo.edu/rsvp_boot?id=123"}
+        self.artifacts["event-organizers"] = {"schema_version": 1, "events": [row]}
+        self.artifacts["campus-identities"]["entities"][0]["relationships"].append({
+            "type": "organized_by", "evidence": [{
+                "collection": "events", "source_key": row["source_key"],
+                "source_record_key": row["source_record_key"],
+                "source_record_id": row["source_record_id"], "source_url": row["source_url"],
+            }],
+        })
+        self.artifacts["campus-identity-coverage"]["relationships"]["organized_by"] = 1
+        self.write_artifacts()
+
+    def test_optional_organizer_evidence_preserves_actual_capture_time(self):
+        self.add_event_organizer()
+        artifacts, hashes = LOADER.load_artifacts(None, self.root)
+        self.assertEqual(artifacts["event-organizers"], self.artifacts["event-organizers"])
+        self.assertIn("event-organizers", hashes)
+
+    def test_organizer_links_require_the_matching_optional_evidence(self):
+        self.add_event_organizer()
+        (self.root / "event-organizers.json").unlink()
+        with self.assertRaisesRegex(ValueError, "organizer relationships"):
+            LOADER.load_artifacts(None, self.root)
+
+    def test_colliding_event_keys_cannot_replace_original_row_evidence(self):
+        self.add_event_organizer()
+        self.artifacts["event-organizers"]["events"][0]["source_record_id"] = "different-original-row"
+        self.write_artifacts()
+        with self.assertRaisesRegex(ValueError, "organizer relationships"):
+            LOADER.load_artifacts(None, self.root)
+
+    def test_organizer_capture_time_is_required_and_timezone_aware(self):
+        self.add_event_organizer()
+        for value in (None, "", "invalid", "2026-08-20T14:05:00"):
+            with self.subTest(value=value):
+                self.artifacts["event-organizers"]["events"][0]["collected_at"] = value
+                self.write_artifacts()
+                with self.assertRaisesRegex(ValueError, "capture time"):
+                    LOADER.load_artifacts(None, self.root)
+
     def test_ambiguous_artifact_options_are_rejected(self):
         for file, directory in ((None, None), (self.root / "campus-identities.json", self.root)):
             with self.subTest(file=file, directory=directory), self.assertRaises(ValueError):
