@@ -14,6 +14,13 @@ database, then installs the matching compiler artifacts in one transaction:
 - `campus-identity-coverage.json`
 - `catalog-conveners.json`
 
+Club/event releases may also include `event-organizers.json`. This optional
+artifact keeps explicit organizer assertions and their actual page-capture
+timestamps separate from the event listing. The loader requires matching
+original event row IDs whenever the identity map includes organizer links;
+matching a repeated title/date key alone is insufficient. Existing three-file
+bundles remain supported.
+
 The coverage counts must agree with the identity map; convener relationships
 must reference catalog evidence present in the bundle. Pass the source version
 used for compilation so a publication between export and load fails explicitly.

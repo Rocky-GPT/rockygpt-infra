@@ -29,6 +29,7 @@ TABLES = (
     "campus_events", "clubs", "programs", "documents", "document_chunks", "release_artifacts",
 )
 PROFILE_ARTIFACTS = ("campus-identities", "campus-identity-coverage", "catalog-conveners")
+OPTIONAL_PROFILE_ARTIFACTS = ("event-organizers",)
 
 
 def local_target(value: str) -> dict[str, str]:
@@ -54,6 +55,9 @@ def load_artifacts(identity_artifact: Path | None, artifact_dir: Path | None) ->
         raise ValueError("Choose exactly one of --identity-artifact and --artifact-dir")
     paths = ({key: artifact_dir / f"{key}.json" for key in PROFILE_ARTIFACTS}
              if artifact_dir is not None else {"campus-identities": identity_artifact})
+    if artifact_dir is not None:
+        paths.update({key: artifact_dir / f"{key}.json" for key in OPTIONAL_PROFILE_ARTIFACTS
+                      if (artifact_dir / f"{key}.json").exists()})
     artifacts, hashes = {}, {}
     for key, path in paths.items():
         raw = path.read_bytes()
@@ -89,6 +93,34 @@ def load_artifacts(identity_artifact: Path | None, artifact_dir: Path | None) ->
                     for evidence in relationship.get("evidence", [])
                 ):
                     raise ValueError("Convener relationships do not match the catalog evidence artifact")
+        organizers = artifacts.get("event-organizers", {"schema_version": 1, "events": []})
+        if organizers.get("schema_version") != 1 or not isinstance(organizers.get("events"), list):
+            raise ValueError("Expected the event-organizers evidence artifact")
+        for row in organizers["events"]:
+            if not isinstance(row, dict) or any(not isinstance(row.get(key), str) or not row[key].strip()
+                    for key in ("source_key", "source_record_key", "source_record_id", "event_url",
+                                "organizer_url", "collected_at", "source_url")):
+                raise ValueError("Event organizer evidence requires original record references and source capture time")
+            try:
+                captured = datetime.fromisoformat(row["collected_at"].replace("Z", "+00:00"))
+                if captured.tzinfo is None:
+                    raise ValueError("Missing capture timezone")
+            except ValueError as error:
+                raise ValueError("Event organizer evidence has an invalid source capture time") from error
+        for entity in identity["entities"]:
+            for relationship in entity.get("relationships", []):
+                if relationship["type"] != "organized_by":
+                    continue
+                evidence = relationship.get("evidence", [])
+                if not evidence or any(not any(
+                    ref.get("collection") == "events"
+                    and ref.get("source_key") == row["source_key"]
+                    and ref.get("source_record_key") == row["source_record_key"]
+                    and ref.get("source_record_id") == row["source_record_id"]
+                    and ref.get("source_url") in {row["source_url"], row["event_url"]}
+                    for row in organizers["events"]
+                ) for ref in evidence):
+                    raise ValueError("Event organizer relationships do not match the source evidence artifact")
     return artifacts, hashes
 
 
