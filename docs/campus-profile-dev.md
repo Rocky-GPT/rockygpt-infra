@@ -43,12 +43,38 @@ are rejected. Connection service, host-address and options overrides are
 rejected. The compatibility option `--identity-artifact FILE` loads a single
 identity map for the original pilot; use `--artifact-dir` for full profiles.
 
-After loading, point the development Brain's campus `DATABASE_URL` to
-`postgresql://brain_campus_reader@127.0.0.1:55434/rockygpt_profiles_dev_candidate`.
-The loader grants that role SELECT on the public campus tables only. Keep the
-separate development accounting/provider configuration unchanged. Restart the
-local Brain through the workspace workflow, then verify `/readiness` and actual
-chat responses expose the expected configuration hash and dataset version.
+The loader grants `brain_campus_reader` SELECT on the public campus tables only.
+Activate committed Brain code with the bounded development launcher:
+
+```sh
+../rockygpt-brain/.venv/bin/python scripts/deploy-profile-brain-dev.py \
+  --revision FULL_40_CHARACTER_BRAIN_COMMIT_SHA \
+  --database postgresql://brain_campus_reader@127.0.0.1:55434/rockygpt_profiles_dev_candidate \
+  --expected-dataset dev-profiles-CANDIDATE
+```
+
+The launcher archives the explicit commit into
+`../.local-logs/profile-feature/brain-builds/<sha>`, checks its integrity, and
+makes the files read-only. It uses the existing virtualenv with an absolute
+`PYTHONPATH` pointing at the archive; it disables bytecode writes and runs without
+reload. Other tasks can continue editing the Brain checkout without changing the
+running code or breaking its configuration hash. No branches are switched and
+uncommitted files are never included in the archive.
+
+Before restarting, it verifies the local reader and expected dataset, imports
+the configuration from the archive, and checks the saved PID's command and
+working directory. It sends SIGTERM only to that local Brain PID, allows graceful
+shutdown, and refuses to kill another process on port 8000. It changes only
+`DATABASE_URL` and `BRAIN_EXPECTED_CONFIG_HASH` in the ignored Brain `.env`;
+the development provider and accounting settings remain unchanged. The original
+environment backup at `../.local-logs/profile-feature/brain.env.before` is retained.
+
+Activation succeeds only when `/readiness` reports the expected archive hash and
+dataset. The safe activation receipt is saved in
+`../.local-logs/profile-feature/activations/`; `active-brain.json` records the
+latest launch. Verify normal chat responses after this startup check. The
+general workspace `run-local.sh` still runs a mutable development checkout;
+rerun the immutable launcher to restore this verified feature deployment.
 
 The dedicated PostgreSQL cluster created for this session is at
 `../.local-logs/profile-postgres-20260921`, bound to loopback port 55434. When it
@@ -56,11 +82,14 @@ is stopped, start it using `/opt/homebrew/opt/postgresql@17/bin/pg_ctl`, that da
 directory, an explicit log path, and `-o '-p 55434 -h 127.0.0.1 -k /tmp'`.
 Do not reset Docker volumes or reuse another database to recover it.
 
-For rollback, restore the saved development campus connection and restart the
-compatible Brain code. The prior database and shared source remain unchanged.
-If rolling back only the profile candidate, select the preceding isolated
-candidate database instead. No production pointer swap or destructive SQL is
-needed.
+For rollback, rerun the immutable launcher with the preceding verified Brain
+commit, local candidate database, and expected dataset from its activation
+receipt. The prior database and shared source remain unchanged. For a data-only
+rollback, keep the compatible Brain commit and select the preceding isolated
+candidate database. Existing archive directories without a valid manifest, or
+with modified files, are rejected; preserve any earlier diagnostic archive under
+a separate backup name before preparing that commit. No production pointer
+swap, source checkout, or destructive SQL is needed.
 
 ## Client acceptance
 
@@ -72,11 +101,12 @@ version, tool trace and displayed answer. Student chat should show the answer an
 citations; tool arguments, coverage and diagnostics belong in Dev's TOOL CALLS
 and complete-response panels. Do not expose diagnostics in the Student layout.
 
-Run loader guards without database access:
+Run loader and immutable-launcher guards without database access or service
+restarts:
 
 ```sh
 ../rockygpt-brain/.venv/bin/python -m unittest discover -s tests \
-  -p 'test_clone_campus_for_dev.py' -v
+  -p 'test_*.py' -v
 ```
 
 This document describes the activation procedure. Successful activation and
