@@ -1,0 +1,139 @@
+"""Destination safety checks for the opt-in local campus snapshot loader."""
+
+import importlib.util
+import hashlib
+import json
+import os
+from pathlib import Path
+import tempfile
+import unittest
+from unittest.mock import patch
+
+
+SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "clone-campus-for-dev.py"
+SPEC = importlib.util.spec_from_file_location("clone_campus_for_dev", SCRIPT)
+assert SPEC is not None and SPEC.loader is not None
+LOADER = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(LOADER)
+
+
+class LocalTargetTests(unittest.TestCase):
+    def test_explicit_loopback_candidate_is_accepted(self):
+        parts = LOADER.local_target(
+            "postgresql://postgres@127.0.0.1:55434/rockygpt_profiles_dev_test"
+        )
+        self.assertEqual(parts["host"], "127.0.0.1")
+        self.assertEqual(parts["port"], "55434")
+        self.assertEqual(parts["dbname"], "rockygpt_profiles_dev_test")
+        self.assertEqual(parts["hostaddr"], "127.0.0.1")
+        self.assertEqual(parts["sslmode"], "disable")
+
+    def test_shared_remote_or_unscoped_database_is_rejected(self):
+        for target in (
+            "postgresql://postgres@db.example:55434/rockygpt_profiles_dev_test",
+            "postgresql://postgres@localhost:55434/rockygpt_profiles_dev_test",
+            "postgresql://postgres@127.0.0.1:55434/neondb",
+            "postgresql://postgres@127.0.0.1/rockygpt_profiles_dev_test",
+            "postgresql://postgres@127.0.0.1:55434/rockygpt_profiles_dev_",
+        ):
+            with self.subTest(target=target), self.assertRaises(ValueError):
+                LOADER.local_target(target)
+
+    def test_destination_overrides_are_rejected(self):
+        base = "host=127.0.0.1 port=55434 dbname=rockygpt_profiles_dev_test "
+        for override in (
+            "hostaddr=192.0.2.20",
+            "service=shared",
+            "options='-c search_path=public'",
+            "sslmode=require",
+        ):
+            with self.subTest(override=override), self.assertRaises(ValueError):
+                LOADER.local_target(base + override)
+
+    def test_invalid_port_is_rejected(self):
+        for port in ("0", "65536", "-1", "5432,5433"):
+            with self.subTest(port=port), self.assertRaises(ValueError):
+                LOADER.local_target(
+                    f"host=127.0.0.1 port={port} dbname=rockygpt_profiles_dev_test"
+                )
+
+    def test_destination_environment_overrides_are_rejected(self):
+        for variable in ("PGHOSTADDR", "PGSERVICE", "PGSERVICEFILE", "PGOPTIONS"):
+            with self.subTest(variable=variable), patch.dict(os.environ, {variable: "override"}):
+                with self.assertRaises(ValueError):
+                    LOADER.local_target(
+                        "postgresql://postgres@127.0.0.1:55434/rockygpt_profiles_dev_test"
+                    )
+
+    def test_snapshot_allowlist_excludes_private_tables(self):
+        self.assertTrue({"campus_contacts", "campus_hours", "release_artifacts"} <= set(LOADER.TABLES))
+        self.assertFalse({"chat_logs", "feedback", "operations", "turns", "reservations"} & set(LOADER.TABLES))
+
+
+class ArtifactBundleTests(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.root = Path(self.directory.name)
+        self.addCleanup(self.directory.cleanup)
+        self.artifacts = {
+            "campus-identities": {"schema_version": 1, "entities": [{
+                "kind": "program", "links": [{"collection": "programs", "source_record_keys": ["program:1"]}],
+                "relationships": [{"type": "convener", "evidence": [{"source_url": "https://catalog.ramapo.edu/programs/1"}]}],
+            }]},
+            "campus-identity-coverage": {"identity_count": 1, "identities_by_kind": {"program": 1},
+                "linked_records": {"programs": 1}, "relationships": {"convener": 1}, "unresolved": []},
+            "catalog-conveners": {"collected_at": "2026-07-19T12:42:34.365Z", "source_url": "https://catalog.ramapo.edu",
+                "programs": [{"catalogUrl": "https://catalog.ramapo.edu/programs/1", "customFields": {"rJQmj": "<a>Professor</a>"}}]},
+        }
+        self.write_artifacts()
+
+    def write_artifacts(self):
+        for key, value in self.artifacts.items():
+            (self.root / f"{key}.json").write_text(json.dumps(value) + "\n")
+
+    def test_matching_trio_preserves_payloads_and_original_collection_time(self):
+        artifacts, hashes = LOADER.load_artifacts(None, self.root)
+        self.assertEqual(artifacts, self.artifacts)
+        self.assertEqual(set(hashes), set(LOADER.PROFILE_ARTIFACTS))
+        for key, digest in hashes.items():
+            self.assertEqual(digest, hashlib.sha256((self.root / f"{key}.json").read_bytes()).hexdigest())
+
+    def test_pilot_identity_input_stays_supported(self):
+        artifacts, hashes = LOADER.load_artifacts(self.root / "campus-identities.json", None)
+        self.assertEqual(artifacts, {"campus-identities": self.artifacts["campus-identities"]})
+        self.assertEqual(list(hashes), ["campus-identities"])
+
+    def test_complete_bundle_is_required_for_directory_input(self):
+        (self.root / "catalog-conveners.json").unlink()
+        with self.assertRaises(FileNotFoundError):
+            LOADER.load_artifacts(None, self.root)
+
+    def test_mixed_coverage_is_rejected(self):
+        self.artifacts["campus-identity-coverage"]["linked_records"] = {"programs": 2}
+        self.write_artifacts()
+        with self.assertRaisesRegex(ValueError, "Coverage artifact"):
+            LOADER.load_artifacts(None, self.root)
+
+    def test_mixed_convener_evidence_is_rejected(self):
+        self.artifacts["catalog-conveners"]["programs"] = []
+        self.write_artifacts()
+        with self.assertRaisesRegex(ValueError, "Convener relationships"):
+            LOADER.load_artifacts(None, self.root)
+
+    def test_ambiguous_artifact_options_are_rejected(self):
+        for file, directory in ((None, None), (self.root / "campus-identities.json", self.root)):
+            with self.subTest(file=file, directory=directory), self.assertRaises(ValueError):
+                LOADER.load_artifacts(file, directory)
+
+    def test_expected_source_release_is_checked_without_rewriting_metadata(self):
+        dataset = {"version": "v2-example", "activated_at": "2026-09-21T12:00:00Z"}
+        self.assertIs(LOADER.expected_source(dataset, "v2-example"), dataset)
+        self.assertIs(LOADER.expected_source(dataset, None), dataset)
+        with self.assertRaisesRegex(ValueError, "changed"):
+            LOADER.expected_source(dataset, "v2-other")
+        with self.assertRaisesRegex(ValueError, "no active"):
+            LOADER.expected_source(None, None)
+
+
+if __name__ == "__main__":
+    unittest.main()
