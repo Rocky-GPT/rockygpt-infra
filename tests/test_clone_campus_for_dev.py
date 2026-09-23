@@ -184,11 +184,40 @@ class ArtifactBundleTests(unittest.TestCase):
             LOADER.load_artifacts(None, self.root)
 
     def test_the_static_map_source_keeps_the_map_collection_time(self):
-        source, run = LOADER.static_source_rows(self.buildings(), "abc")
+        source, run = LOADER.static_source_rows(self.buildings(), "abc", "map_generated_at", "buildings")
         self.assertEqual(source["source_key"], "campus-map")
         self.assertEqual(set(source), set(LOADER.SOURCE_FIELDS))
         self.assertEqual((run["status"], run["completed_at"], run["record_count"], run["content_hash"]),
                          ("static", "2026-08-27T16:58:11.587Z", 1, "abc"))
+
+    def test_school_placements_need_schools_from_the_bundle(self):
+        school = {"id": "school-snh", "kind": "school", "links": [
+            {"collection": "schools", "source_key": "ramapo-schools", "source_record_keys": ["snh"]}]}
+        self.artifacts["campus-identities"]["entities"].append(school)
+        self.artifacts["campus-identities"]["entities"][0]["relationships"].append({
+            "type": "part_of", "target_entity_id": "school-snh", "evidence": [
+                {"collection": "programs", "source_key": "academic-programs", "source_record_key": "program:1", "field": "school"}]})
+        self.artifacts["campus-identity-coverage"].update(
+            identity_count=2, identities_by_kind={"program": 1, "school": 1},
+            linked_records={"programs": 1, "schools": 1}, relationships={"convener": 1, "part_of": 1})
+        self.write_artifacts()
+        with self.assertRaisesRegex(ValueError, "need the matching campus-schools artifact"):
+            LOADER.load_artifacts(None, self.root)
+        schools = {"schema_version": 1, "captured_at": "2026-09-23T12:31:43Z",
+                   "source": {"source_key": "ramapo-schools", "title": "Ramapo Schools",
+                              "canonical_url": "https://www.ramapo.edu/academics/schools/",
+                              "trust_tier": "official_primary", "freshness_sla_hours": 4320, "domain": "schools"},
+                   "schools": [{"section": "snh", "name": "School of Science, Nursing, and Health"}]}
+        self.artifacts["campus-schools"] = schools
+        self.write_artifacts()
+        LOADER.load_artifacts(None, self.root)
+        source, run = LOADER.static_source_rows(schools, "def", "captured_at", "schools")
+        self.assertEqual((source["source_key"], run["completed_at"], run["record_count"]),
+                         ("ramapo-schools", "2026-09-23T12:31:43Z", 1))
+        self.artifacts["campus-identities"]["entities"][0]["relationships"][1]["evidence"][0]["field"] = "name"
+        self.write_artifacts()
+        with self.assertRaisesRegex(ValueError, "cite a published school field"):
+            LOADER.load_artifacts(None, self.root)
 
     def test_matching_trio_preserves_payloads_and_original_collection_time(self):
         artifacts, hashes = LOADER.load_artifacts(None, self.root)

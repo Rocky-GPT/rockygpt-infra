@@ -29,6 +29,12 @@ source release published before the campus map became a source has no
 block, with a static source run that keeps the map's own collection time
 (`map_generated_at`) rather than the load time.
 
+School releases may add `campus-schools.json`. School identities must link to
+schools in that artifact, and every `part_of` relationship must target a school
+and cite a program's or a faculty profile's published `school` field. The
+`ramapo-schools` static source is created the same way as `campus-map`, with its
+run keeping the schools page capture time (`captured_at`).
+
 Requirement releases may add `catalog-course-identities.json` and
 `program-requirement-groups.json`. The loader recomputes every course ID with
 the preserved derivation (UUIDv5 over Python's
