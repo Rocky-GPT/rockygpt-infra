@@ -147,6 +147,49 @@ class ArtifactBundleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Program faculty relationships do not match"):
             LOADER.load_artifacts(None, self.root)
 
+    def buildings(self):
+        return {"schema_version": 1, "map_generated_at": "2026-08-27T16:58:11.587Z",
+                "source": {"source_key": "campus-map", "title": "Ramapo Campus Map",
+                           "canonical_url": "https://map.ramapo.edu/", "trust_tier": "official_primary",
+                           "freshness_sla_hours": 4320, "domain": "map"},
+                "buildings": [{"concept3d_id": "1133371", "name": "Academic Building D", "room_prefixes": ["D"]}],
+                "unresolved": []}
+
+    def test_room_relationships_need_buildings_from_the_bundle(self):
+        building = {"id": "building-d", "kind": "building", "links": [
+            {"collection": "buildings", "source_key": "campus-map", "source_record_keys": ["1133371"]}]}
+        self.artifacts["campus-identities"]["entities"].append(building)
+        self.artifacts["campus-identities"]["entities"][0]["relationships"].append({
+            "type": "located_at", "target_entity_id": "building-d", "evidence": [
+                {"collection": "contacts", "source_key": "campus-directory", "source_record_key": "office:x", "field": "office"}]})
+        coverage = self.artifacts["campus-identity-coverage"]
+        coverage.update(identity_count=2, identities_by_kind={"program": 1, "building": 1},
+                        linked_records={"programs": 1, "buildings": 1},
+                        relationships={"convener": 1, "located_at": 1})
+        self.write_artifacts()
+        with self.assertRaisesRegex(ValueError, "need the matching campus-buildings artifact"):
+            LOADER.load_artifacts(None, self.root)
+        self.artifacts["campus-buildings"] = self.buildings()
+        self.write_artifacts()
+        artifacts, hashes = LOADER.load_artifacts(None, self.root)
+        self.assertIn("campus-buildings", hashes)
+        building["links"][0]["source_record_keys"] = ["1133372"]
+        self.write_artifacts()
+        with self.assertRaisesRegex(ValueError, "must link to buildings in the campus-buildings artifact"):
+            LOADER.load_artifacts(None, self.root)
+        building["links"][0]["source_record_keys"] = ["1133371"]
+        self.artifacts["campus-identities"]["entities"][0]["relationships"][1]["evidence"][0]["field"] = "name"
+        self.write_artifacts()
+        with self.assertRaisesRegex(ValueError, "cite a contact's office"):
+            LOADER.load_artifacts(None, self.root)
+
+    def test_the_static_map_source_keeps_the_map_collection_time(self):
+        source, run = LOADER.static_source_rows(self.buildings(), "abc")
+        self.assertEqual(source["source_key"], "campus-map")
+        self.assertEqual(set(source), set(LOADER.SOURCE_FIELDS))
+        self.assertEqual((run["status"], run["completed_at"], run["record_count"], run["content_hash"]),
+                         ("static", "2026-08-27T16:58:11.587Z", 1, "abc"))
+
     def test_matching_trio_preserves_payloads_and_original_collection_time(self):
         artifacts, hashes = LOADER.load_artifacts(None, self.root)
         self.assertEqual(artifacts, self.artifacts)
