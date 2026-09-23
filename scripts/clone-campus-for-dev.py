@@ -32,7 +32,11 @@ TABLES = (
 PROFILE_ARTIFACTS = ("campus-identities", "campus-identity-coverage", "catalog-conveners")
 OPTIONAL_PROFILE_ARTIFACTS = (
     "event-organizers", "catalog-course-identities", "program-requirement-groups", "campus-buildings",
+    "campus-schools",
 )
+# Static sources a bundle may publish records for: artifact, collection time field and record list.
+STATIC_SOURCE_ARTIFACTS = {"campus-buildings": ("map_generated_at", "buildings"),
+                           "campus-schools": ("captured_at", "schools")}
 ROOM_RELATIONSHIPS = ("office_at", "located_at")
 SOURCE_FIELDS = ("source_key", "title", "canonical_url", "trust_tier", "freshness_sla_hours", "domain")
 
@@ -103,15 +107,44 @@ def validate_building_bundle(identity: dict, buildings: dict | None) -> None:
             raise ValueError("Room relationships must target buildings and cite a contact's office")
 
 
-def static_source_rows(buildings: dict, content_hash: str) -> tuple[dict, dict]:
-    """The campus-map source and its static run, for releases published before the source existed.
+def validate_school_bundle(identity: dict, schools: dict | None) -> None:
+    """School identities link to the artifact's schools; part_of cites a program's or profile's school."""
+    kinds = {entity.get("id"): entity.get("kind") for entity in identity["entities"]}
+    placements = [relationship for entity in identity["entities"]
+                  for relationship in entity.get("relationships", []) if relationship.get("type") == "part_of"]
+    if schools is None:
+        if "school" in kinds.values() or placements:
+            raise ValueError("School identities need the matching campus-schools artifact")
+        return
+    source = schools.get("source")
+    if schools.get("schema_version") != 1 or not isinstance(schools.get("schools"), list) \
+            or not isinstance(source, dict) or any(not source.get(key) for key in SOURCE_FIELDS):
+        raise ValueError("Expected the compiler's campus-schools artifact")
+    sections = {school.get("section") for school in schools["schools"]}
+    for entity in identity["entities"]:
+        if entity.get("kind") != "school":
+            continue
+        keys = [key for link in entity.get("links", []) if link.get("collection") == "schools"
+                and link.get("source_key") == source["source_key"] for key in link.get("source_record_keys", [])]
+        if not keys or any(key not in sections for key in keys):
+            raise ValueError("School identities must link to schools in the campus-schools artifact")
+    for relationship in placements:
+        if kinds.get(relationship.get("target_entity_id")) != "school" or any(
+            (evidence.get("collection"), evidence.get("field")) not in {("programs", "school"), ("faculty", "school")}
+            for evidence in relationship.get("evidence", [])
+        ):
+            raise ValueError("part_of relationships must target schools and cite a published school field")
 
-    The run keeps the map's own collection time rather than inventing a load time.
+
+def static_source_rows(artifact: dict, content_hash: str, time_field: str, records: str) -> tuple[dict, dict]:
+    """A static source and its run, for releases published before the source existed.
+
+    The run keeps the artifact's own collection time rather than inventing a load time.
     """
-    source = {key: buildings["source"][key] for key in SOURCE_FIELDS}
+    source = {key: artifact["source"][key] for key in SOURCE_FIELDS}
     run = {"source_key": source["source_key"], "status": "static",
-           "started_at": buildings.get("map_generated_at"), "completed_at": buildings.get("map_generated_at"),
-           "source_url": source["canonical_url"], "record_count": len(buildings["buildings"]),
+           "started_at": artifact.get(time_field), "completed_at": artifact.get(time_field),
+           "source_url": source["canonical_url"], "record_count": len(artifact[records]),
            "content_hash": content_hash}
     return source, run
 
@@ -183,6 +216,7 @@ def load_artifacts(identity_artifact: Path | None, artifact_dir: Path | None) ->
                 ):
                     raise ValueError(f"{label} relationships do not match the catalog evidence artifact")
         validate_building_bundle(identity, artifacts.get("campus-buildings"))
+        validate_school_bundle(identity, artifacts.get("campus-schools"))
         validate_requirement_bundle(identity, artifacts.get("catalog-course-identities"),
                                     artifacts.get("program-requirement-groups"))
         organizers = artifacts.get("event-organizers", {"schema_version": 1, "events": []})
@@ -314,9 +348,11 @@ def main() -> None:
                         ) for row in rows])
                 counts[table] = len(rows)
                 print(f"Copied {table}: {len(rows)}", flush=True)
-            if "campus-buildings" in artifacts:
-                # A source release published before the campus map was a source lacks its row.
-                source_row, run_row = static_source_rows(artifacts["campus-buildings"], artifact_hashes["campus-buildings"])
+            for key, (time_field, records) in STATIC_SOURCE_ARTIFACTS.items():
+                if key not in artifacts:
+                    continue
+                # A source release published before this static source existed lacks its row.
+                source_row, run_row = static_source_rows(artifacts[key], artifact_hashes[key], time_field, records)
                 if not target.execute("SELECT 1 FROM rockygpt_v2.sources WHERE source_key=%s",
                                       (source_row["source_key"],)).fetchone():
                     target.execute(
