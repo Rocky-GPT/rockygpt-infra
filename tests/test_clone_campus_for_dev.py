@@ -219,6 +219,42 @@ class ArtifactBundleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "cite a published school field"):
             LOADER.load_artifacts(None, self.root)
 
+    def test_subject_courses_need_subjects_from_the_bundle(self):
+        subject = {"id": "subject-cmps", "kind": "subject", "links": [
+            {"collection": "subjects", "source_key": "course-subjects", "source_record_keys": ["CMPS"]}],
+            "relationships": [{"type": "includes_course", "target_record": {
+                "collection": "courses", "source_key": "academic-programs", "source_record_key": "CMPS 147"},
+                "evidence": [{"collection": "courses", "source_key": "academic-programs",
+                              "source_record_key": "CMPS 147", "field": "code"}]}]}
+        self.artifacts["campus-identities"]["entities"].append(subject)
+        self.artifacts["campus-identity-coverage"].update(
+            identity_count=2, identities_by_kind={"program": 1, "subject": 1},
+            linked_records={"programs": 1, "subjects": 1}, relationships={"convener": 1, "includes_course": 1})
+        self.write_artifacts()
+        with self.assertRaisesRegex(ValueError, "need the matching course-subjects artifact"):
+            LOADER.load_artifacts(None, self.root)
+        subjects = {"schema_version": 1, "captured_at": "2026-08-27T14:22:13.103Z",
+                    "source": {"source_key": "course-subjects", "title": "Ramapo Catalog Subjects",
+                               "canonical_url": "https://catalog.ramapo.edu/", "trust_tier": "official_primary",
+                               "freshness_sla_hours": 4320, "domain": "courses"},
+                    "subjects": [{"code": "CMPS", "name": "Computer Science"}]}
+        self.artifacts["course-subjects"] = subjects
+        self.write_artifacts()
+        LOADER.load_artifacts(None, self.root)
+        source, run = LOADER.static_source_rows(subjects, "ghi", "captured_at", "subjects")
+        self.assertEqual((source["source_key"], run["completed_at"], run["record_count"]),
+                         ("course-subjects", "2026-08-27T14:22:13.103Z", 1))
+        # A course filed under another subject's code is not this subject's course.
+        subject["relationships"][0]["target_record"]["source_record_key"] = "MATH 110"
+        self.write_artifacts()
+        with self.assertRaisesRegex(ValueError, "course's own code under its subject's code"):
+            LOADER.load_artifacts(None, self.root)
+        subject["relationships"][0]["target_record"]["source_record_key"] = "CMPS 147"
+        subject["links"][0]["source_record_keys"] = ["CMPT"]
+        self.write_artifacts()
+        with self.assertRaisesRegex(ValueError, "link to one subject in the course-subjects artifact"):
+            LOADER.load_artifacts(None, self.root)
+
     def test_matching_trio_preserves_payloads_and_original_collection_time(self):
         artifacts, hashes = LOADER.load_artifacts(None, self.root)
         self.assertEqual(artifacts, self.artifacts)

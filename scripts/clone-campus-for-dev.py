@@ -32,11 +32,12 @@ TABLES = (
 PROFILE_ARTIFACTS = ("campus-identities", "campus-identity-coverage", "catalog-conveners")
 OPTIONAL_PROFILE_ARTIFACTS = (
     "event-organizers", "catalog-course-identities", "program-requirement-groups", "campus-buildings",
-    "campus-schools",
+    "campus-schools", "course-subjects",
 )
 # Static sources a bundle may publish records for: artifact, collection time field and record list.
 STATIC_SOURCE_ARTIFACTS = {"campus-buildings": ("map_generated_at", "buildings"),
-                           "campus-schools": ("captured_at", "schools")}
+                           "campus-schools": ("captured_at", "schools"),
+                           "course-subjects": ("captured_at", "subjects")}
 ROOM_RELATIONSHIPS = ("office_at", "located_at")
 SOURCE_FIELDS = ("source_key", "title", "canonical_url", "trust_tier", "freshness_sla_hours", "domain")
 
@@ -136,6 +137,37 @@ def validate_school_bundle(identity: dict, schools: dict | None) -> None:
             raise ValueError("part_of relationships must target schools and cite a published school field")
 
 
+def validate_subject_bundle(identity: dict, subjects: dict | None) -> None:
+    """Subject identities link to the artifact's codes; each course cites its own code under that code."""
+    listed = [entity for entity in identity["entities"] if entity.get("kind") == "subject"]
+    included = [(entity, relationship) for entity in identity["entities"]
+                for relationship in entity.get("relationships", []) if relationship.get("type") == "includes_course"]
+    if subjects is None:
+        if listed or included:
+            raise ValueError("Subject identities need the matching course-subjects artifact")
+        return
+    source = subjects.get("source")
+    if subjects.get("schema_version") != 1 or not isinstance(subjects.get("subjects"), list) \
+            or not isinstance(source, dict) or any(not source.get(key) for key in SOURCE_FIELDS):
+        raise ValueError("Expected the compiler's course-subjects artifact")
+    codes = {subject.get("code") for subject in subjects["subjects"]}
+    own = {}
+    for entity in listed:
+        keys = [key for link in entity.get("links", []) if link.get("collection") == "subjects"
+                and link.get("source_key") == source["source_key"] for key in link.get("source_record_keys", [])]
+        if len(keys) != 1 or keys[0] not in codes:
+            raise ValueError("Subject identities must link to one subject in the course-subjects artifact")
+        own[entity.get("id")] = keys[0]
+    for entity, relationship in included:
+        target = relationship.get("target_record") or {}
+        key = target.get("source_record_key", "")
+        if entity.get("id") not in own or target.get("collection") != "courses" \
+                or not key.startswith(f"{own[entity.get('id')]} ") or any(
+                    (evidence.get("collection"), evidence.get("source_record_key"), evidence.get("field"))
+                    != ("courses", key, "code") for evidence in relationship.get("evidence", [])):
+            raise ValueError("includes_course relationships must cite a course's own code under its subject's code")
+
+
 def static_source_rows(artifact: dict, content_hash: str, time_field: str, records: str) -> tuple[dict, dict]:
     """A static source and its run, for releases published before the source existed.
 
@@ -217,6 +249,7 @@ def load_artifacts(identity_artifact: Path | None, artifact_dir: Path | None) ->
                     raise ValueError(f"{label} relationships do not match the catalog evidence artifact")
         validate_building_bundle(identity, artifacts.get("campus-buildings"))
         validate_school_bundle(identity, artifacts.get("campus-schools"))
+        validate_subject_bundle(identity, artifacts.get("course-subjects"))
         validate_requirement_bundle(identity, artifacts.get("catalog-course-identities"),
                                     artifacts.get("program-requirement-groups"))
         organizers = artifacts.get("event-organizers", {"schema_version": 1, "events": []})
