@@ -121,15 +121,20 @@ def load_artifacts(identity_artifact: Path | None, artifact_dir: Path | None) ->
         conveners = artifacts["catalog-conveners"]
         if not isinstance(conveners.get("programs"), list) or "collected_at" not in conveners or not isinstance(conveners.get("source_url"), str):
             raise ValueError("Expected the compiler's catalog-conveners artifact")
-        explicit_urls = {row.get("catalogUrl") for row in conveners["programs"]
-                         if isinstance(row, dict) and isinstance(row.get("customFields", {}).get("rJQmj"), str)}
+        # Each catalog relationship must cite a program whose own field is in the artifact.
+        fields = {"convener": ("rJQmj", "Convener"), "listed_faculty": ("xiQxl", "Program faculty")}
+        explicit_urls = {kind: {row.get("catalogUrl") for row in conveners["programs"]
+                                if isinstance(row, dict) and isinstance(row.get("customFields", {}).get(field), str)}
+                         for kind, (field, _) in fields.items()}
         for entity in identity["entities"]:
             for relationship in entity.get("relationships", []):
-                if relationship["type"] == "convener" and any(
-                    evidence.get("source_url") not in explicit_urls
+                field, label = fields.get(relationship["type"], (None, None))
+                if field and any(
+                    evidence.get("source_url") not in explicit_urls[relationship["type"]]
+                    or evidence.get("field") != f"customFields.{field}"
                     for evidence in relationship.get("evidence", [])
                 ):
-                    raise ValueError("Convener relationships do not match the catalog evidence artifact")
+                    raise ValueError(f"{label} relationships do not match the catalog evidence artifact")
         validate_requirement_bundle(identity, artifacts.get("catalog-course-identities"),
                                     artifacts.get("program-requirement-groups"))
         organizers = artifacts.get("event-organizers", {"schema_version": 1, "events": []})

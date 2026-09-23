@@ -29,8 +29,12 @@ difference. Requirement edges must point to programs in the identity map,
 groups in the bundle and courses in the course artifact, and requirement
 groups need the course artifact beside them.
 
-The coverage counts must agree with the identity map; convener relationships
-must reference catalog evidence present in the bundle. Pass the source version
+The coverage counts must agree with the identity map. Convener and
+`listed_faculty` relationships must cite a program whose own Convener
+(`rJQmj`) or Program Faculty (`xiQxl`) field is in `catalog-conveners.json`.
+Deploy a Brain that knows every relationship type and identity kind in the
+bundle before activating it: the Brain refuses an identity map with a type it
+does not know, which makes every profile unavailable. Pass the source version
 used for compilation so a publication between export and load fails explicitly.
 The loader does not regenerate collection timestamps or claim fresh source
 verification. It is a public development snapshot with a profile overlay, not a
