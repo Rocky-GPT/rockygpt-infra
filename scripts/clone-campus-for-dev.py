@@ -30,7 +30,11 @@ TABLES = (
     "campus_events", "clubs", "programs", "documents", "document_chunks", "release_artifacts",
 )
 PROFILE_ARTIFACTS = ("campus-identities", "campus-identity-coverage", "catalog-conveners")
-OPTIONAL_PROFILE_ARTIFACTS = ("event-organizers", "catalog-course-identities", "program-requirement-groups")
+OPTIONAL_PROFILE_ARTIFACTS = (
+    "event-organizers", "catalog-course-identities", "program-requirement-groups", "campus-buildings",
+)
+ROOM_RELATIONSHIPS = ("office_at", "located_at")
+SOURCE_FIELDS = ("source_key", "title", "canonical_url", "trust_tier", "freshness_sla_hours", "domain")
 
 
 def course_identity_id(source_key: str, code: str) -> str:
@@ -67,6 +71,49 @@ def validate_requirement_bundle(identity: dict, courses: dict | None, groups: di
             valid = False
         if not valid:
             raise ValueError("A requirement edge points outside the compiled programs, groups or courses")
+
+
+def validate_building_bundle(identity: dict, buildings: dict | None) -> None:
+    """Building identities link to the artifact's map locations; rooms cite a contact's office."""
+    kinds = {entity.get("id"): entity.get("kind") for entity in identity["entities"]}
+    room_relationships = [relationship for entity in identity["entities"]
+                          for relationship in entity.get("relationships", [])
+                          if relationship.get("type") in ROOM_RELATIONSHIPS]
+    if buildings is None:
+        if "building" in kinds.values() or room_relationships:
+            raise ValueError("Building identities need the matching campus-buildings artifact")
+        return
+    source = buildings.get("source")
+    if buildings.get("schema_version") != 1 or not isinstance(buildings.get("buildings"), list) \
+            or not isinstance(source, dict) or any(not source.get(key) for key in SOURCE_FIELDS):
+        raise ValueError("Expected the compiler's campus-buildings artifact")
+    locations = {building.get("concept3d_id") for building in buildings["buildings"]}
+    for entity in identity["entities"]:
+        if entity.get("kind") != "building":
+            continue
+        keys = [key for link in entity.get("links", []) if link.get("collection") == "buildings"
+                and link.get("source_key") == source["source_key"] for key in link.get("source_record_keys", [])]
+        if not keys or any(key not in locations for key in keys):
+            raise ValueError("Building identities must link to buildings in the campus-buildings artifact")
+    for relationship in room_relationships:
+        if kinds.get(relationship.get("target_entity_id")) != "building" or any(
+            evidence.get("collection") != "contacts" or evidence.get("field") != "office"
+            for evidence in relationship.get("evidence", [])
+        ):
+            raise ValueError("Room relationships must target buildings and cite a contact's office")
+
+
+def static_source_rows(buildings: dict, content_hash: str) -> tuple[dict, dict]:
+    """The campus-map source and its static run, for releases published before the source existed.
+
+    The run keeps the map's own collection time rather than inventing a load time.
+    """
+    source = {key: buildings["source"][key] for key in SOURCE_FIELDS}
+    run = {"source_key": source["source_key"], "status": "static",
+           "started_at": buildings.get("map_generated_at"), "completed_at": buildings.get("map_generated_at"),
+           "source_url": source["canonical_url"], "record_count": len(buildings["buildings"]),
+           "content_hash": content_hash}
+    return source, run
 
 
 def local_target(value: str) -> dict[str, str]:
@@ -135,6 +182,7 @@ def load_artifacts(identity_artifact: Path | None, artifact_dir: Path | None) ->
                     for evidence in relationship.get("evidence", [])
                 ):
                     raise ValueError(f"{label} relationships do not match the catalog evidence artifact")
+        validate_building_bundle(identity, artifacts.get("campus-buildings"))
         validate_requirement_bundle(identity, artifacts.get("catalog-course-identities"),
                                     artifacts.get("program-requirement-groups"))
         organizers = artifacts.get("event-organizers", {"schema_version": 1, "events": []})
@@ -266,6 +314,26 @@ def main() -> None:
                         ) for row in rows])
                 counts[table] = len(rows)
                 print(f"Copied {table}: {len(rows)}", flush=True)
+            if "campus-buildings" in artifacts:
+                # A source release published before the campus map was a source lacks its row.
+                source_row, run_row = static_source_rows(artifacts["campus-buildings"], artifact_hashes["campus-buildings"])
+                if not target.execute("SELECT 1 FROM rockygpt_v2.sources WHERE source_key=%s",
+                                      (source_row["source_key"],)).fetchone():
+                    target.execute(
+                        "INSERT INTO rockygpt_v2.sources (source_key,title,canonical_url,trust_tier,freshness_sla_hours,domain) "
+                        "VALUES (%(source_key)s,%(title)s,%(canonical_url)s,%(trust_tier)s,%(freshness_sla_hours)s,%(domain)s)",
+                        source_row,
+                    )
+                    counts["sources"] += 1
+                if not target.execute("SELECT 1 FROM rockygpt_v2.source_runs WHERE dataset_version_id=%s AND source_key=%s",
+                                      (dataset_id, run_row["source_key"])).fetchone():
+                    target.execute(
+                        "INSERT INTO rockygpt_v2.source_runs (dataset_version_id,source_key,status,started_at,completed_at,"
+                        "source_url,record_count,content_hash) VALUES (%(dataset_version_id)s,%(source_key)s,%(status)s,"
+                        "%(started_at)s,%(completed_at)s,%(source_url)s,%(record_count)s,%(content_hash)s)",
+                        {**run_row, "dataset_version_id": dataset_id},
+                    )
+                    counts["source_runs"] += 1
             for key, payload in artifacts.items():
                 target.execute(
                     "INSERT INTO rockygpt_v2.release_artifacts(dataset_version_id,artifact_key,payload,content_hash) "

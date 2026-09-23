@@ -21,6 +21,14 @@ original event row IDs whenever the identity map includes organizer links;
 matching a repeated title/date key alone is insufficient. Existing three-file
 bundles remain supported.
 
+Building releases may add `campus-buildings.json`. Building identities must link
+to map locations in that artifact, and every `office_at` or `located_at`
+relationship must target a building and cite a contact's `office` field. A
+source release published before the campus map became a source has no
+`campus-map` source row; the loader then creates it from the artifact's `source`
+block, with a static source run that keeps the map's own collection time
+(`map_generated_at`) rather than the load time.
+
 Requirement releases may add `catalog-course-identities.json` and
 `program-requirement-groups.json`. The loader recomputes every course ID with
 the preserved derivation (UUIDv5 over Python's
