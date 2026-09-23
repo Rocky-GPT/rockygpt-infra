@@ -35,6 +35,13 @@ and cite a program's or a faculty profile's published `school` field. The
 `ramapo-schools` static source is created the same way as `campus-map`, with its
 run keeping the schools page capture time (`captured_at`).
 
+Subject releases may add `course-subjects.json`. Each subject identity must link
+to exactly one subject code in that artifact. Every `includes_course`
+relationship must target a catalog course whose code starts with that subject's
+code, and cite that course's own `code` field. The `course-subjects` static
+source is created the same way, with its run keeping the department list's
+capture time (`captured_at`).
+
 Requirement releases may add `catalog-course-identities.json` and
 `program-requirement-groups.json`. The loader recomputes every course ID with
 the preserved derivation (UUIDv5 over Python's
