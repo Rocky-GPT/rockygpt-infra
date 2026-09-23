@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import re
+import uuid
 from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
@@ -29,7 +30,43 @@ TABLES = (
     "campus_events", "clubs", "programs", "documents", "document_chunks", "release_artifacts",
 )
 PROFILE_ARTIFACTS = ("campus-identities", "campus-identity-coverage", "catalog-conveners")
-OPTIONAL_PROFILE_ARTIFACTS = ("event-organizers",)
+OPTIONAL_PROFILE_ARTIFACTS = ("event-organizers", "catalog-course-identities", "program-requirement-groups")
+
+
+def course_identity_id(source_key: str, code: str) -> str:
+    """The Brain's original course ID derivation; published IDs must match it exactly."""
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, json.dumps(["rockygpt", "course", source_key, code])))
+
+
+def validate_requirement_bundle(identity: dict, courses: dict | None, groups: dict | None) -> None:
+    if courses is not None:
+        if courses.get("schema_version") != 1 or not isinstance(courses.get("courses"), list):
+            raise ValueError("Expected the catalog-course-identities artifact")
+        for course in courses["courses"]:
+            if course.get("id") != course_identity_id(course.get("source_key", ""), course.get("source_record_key", "")):
+                raise ValueError("A published course ID differs from the preserved course ID derivation")
+    if groups is None:
+        return
+    if courses is None:
+        raise ValueError("Requirement groups need the matching catalog-course-identities artifact")
+    if groups.get("schema_version") != 1 or not isinstance(groups.get("groups"), list) or not isinstance(groups.get("edges"), list):
+        raise ValueError("Expected the program-requirement-groups artifact")
+    group_ids = [group.get("id") for group in groups["groups"]]
+    if len(set(group_ids)) != len(group_ids):
+        raise ValueError("Requirement group IDs must be unique")
+    programs = {entity.get("id") for entity in identity["entities"] if entity.get("kind") == "program"}
+    course_ids = {course["id"] for course in courses["courses"]}
+    known = set(group_ids)
+    for edge in groups["edges"]:
+        source, target = edge.get("source", {}), edge.get("target", {})
+        if edge.get("type") == "requirement_group":
+            valid = source.get("entity_id") in programs and target.get("record_id") in known
+        elif edge.get("type") == "requirement_option":
+            valid = source.get("record_id") in known and target.get("entity_id") in course_ids
+        else:
+            valid = False
+        if not valid:
+            raise ValueError("A requirement edge points outside the compiled programs, groups or courses")
 
 
 def local_target(value: str) -> dict[str, str]:
@@ -93,6 +130,8 @@ def load_artifacts(identity_artifact: Path | None, artifact_dir: Path | None) ->
                     for evidence in relationship.get("evidence", [])
                 ):
                     raise ValueError("Convener relationships do not match the catalog evidence artifact")
+        validate_requirement_bundle(identity, artifacts.get("catalog-course-identities"),
+                                    artifacts.get("program-requirement-groups"))
         organizers = artifacts.get("event-organizers", {"schema_version": 1, "events": []})
         if organizers.get("schema_version") != 1 or not isinstance(organizers.get("events"), list):
             raise ValueError("Expected the event-organizers evidence artifact")

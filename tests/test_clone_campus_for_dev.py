@@ -91,6 +91,44 @@ class ArtifactBundleTests(unittest.TestCase):
         for key, value in self.artifacts.items():
             (self.root / f"{key}.json").write_text(json.dumps(value) + "\n")
 
+    def test_course_identities_must_keep_the_preserved_derivation(self):
+        code = "CMPS 147"
+        courses = {"schema_version": 1, "derivation": "fixture", "courses": [{
+            "id": "39b6f485-63cd-5e73-bce1-d1815efbc785", "source_key": "academic-programs",
+            "source_record_key": code, "name": None}]}
+        self.artifacts["catalog-course-identities"] = courses
+        self.write_artifacts()
+        artifacts, hashes = LOADER.load_artifacts(None, self.root)
+        self.assertIn("catalog-course-identities", hashes)
+        courses["courses"][0]["id"] = "00000000-0000-5000-8000-000000000000"
+        self.write_artifacts()
+        with self.assertRaisesRegex(ValueError, "preserved course ID derivation"):
+            LOADER.load_artifacts(None, self.root)
+
+    def test_requirement_edges_must_stay_inside_the_bundle(self):
+        program = "11111111-1111-4111-8111-111111111111"
+        course = LOADER.course_identity_id("academic-programs", "CMPS 147")
+        self.artifacts["campus-identities"]["entities"][0]["id"] = program
+        self.artifacts["catalog-course-identities"] = {"schema_version": 1, "derivation": "fixture", "courses": [
+            {"id": course, "source_key": "academic-programs", "source_record_key": "CMPS 147", "name": None}]}
+        groups = {"schema_version": 1, "groups": [{"id": "group-1"}], "edges": [
+            {"type": "requirement_group", "source": {"entity_id": program}, "target": {"record_id": "group-1"}},
+            {"type": "requirement_option", "source": {"record_id": "group-1"}, "target": {"entity_id": course}},
+        ]}
+        self.artifacts["program-requirement-groups"] = groups
+        self.write_artifacts()
+        LOADER.load_artifacts(None, self.root)
+        groups["edges"][1]["target"]["entity_id"] = "22222222-2222-4222-8222-222222222222"
+        self.write_artifacts()
+        with self.assertRaisesRegex(ValueError, "outside the compiled programs, groups or courses"):
+            LOADER.load_artifacts(None, self.root)
+        groups["edges"][1]["target"]["entity_id"] = course
+        del self.artifacts["catalog-course-identities"]
+        (self.root / "catalog-course-identities.json").unlink()
+        self.write_artifacts()
+        with self.assertRaisesRegex(ValueError, "need the matching catalog-course-identities"):
+            LOADER.load_artifacts(None, self.root)
+
     def test_matching_trio_preserves_payloads_and_original_collection_time(self):
         artifacts, hashes = LOADER.load_artifacts(None, self.root)
         self.assertEqual(artifacts, self.artifacts)

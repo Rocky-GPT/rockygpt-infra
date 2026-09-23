@@ -21,6 +21,14 @@ original event row IDs whenever the identity map includes organizer links;
 matching a repeated title/date key alone is insufficient. Existing three-file
 bundles remain supported.
 
+Requirement releases may add `catalog-course-identities.json` and
+`program-requirement-groups.json`. The loader recomputes every course ID with
+the preserved derivation (UUIDv5 over Python's
+`json.dumps(["rockygpt", "course", source_key, code])`) and refuses any
+difference. Requirement edges must point to programs in the identity map,
+groups in the bundle and courses in the course artifact, and requirement
+groups need the course artifact beside them.
+
 The coverage counts must agree with the identity map; convener relationships
 must reference catalog evidence present in the bundle. Pass the source version
 used for compilation so a publication between export and load fails explicitly.
