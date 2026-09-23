@@ -78,7 +78,8 @@ class ArtifactBundleTests(unittest.TestCase):
         self.artifacts = {
             "campus-identities": {"schema_version": 1, "entities": [{
                 "kind": "program", "links": [{"collection": "programs", "source_record_keys": ["program:1"]}],
-                "relationships": [{"type": "convener", "evidence": [{"source_url": "https://catalog.ramapo.edu/programs/1"}]}],
+                "relationships": [{"type": "convener", "evidence": [{
+                    "field": "customFields.rJQmj", "source_url": "https://catalog.ramapo.edu/programs/1"}]}],
             }]},
             "campus-identity-coverage": {"identity_count": 1, "identities_by_kind": {"program": 1},
                 "linked_records": {"programs": 1}, "relationships": {"convener": 1}, "unresolved": []},
@@ -127,6 +128,23 @@ class ArtifactBundleTests(unittest.TestCase):
         (self.root / "catalog-course-identities.json").unlink()
         self.write_artifacts()
         with self.assertRaisesRegex(ValueError, "need the matching catalog-course-identities"):
+            LOADER.load_artifacts(None, self.root)
+
+    def test_program_faculty_listings_need_their_own_catalog_field(self):
+        entity = self.artifacts["campus-identities"]["entities"][0]
+        entity["relationships"].append({"type": "listed_faculty", "evidence": [{
+            "field": "customFields.xiQxl", "source_url": "https://catalog.ramapo.edu/programs/1"}]})
+        self.artifacts["campus-identity-coverage"]["relationships"]["listed_faculty"] = 1
+        self.write_artifacts()
+        # The program publishes a Convener field but no Program Faculty field.
+        with self.assertRaisesRegex(ValueError, "Program faculty relationships do not match"):
+            LOADER.load_artifacts(None, self.root)
+        self.artifacts["catalog-conveners"]["programs"][0]["customFields"]["xiQxl"] = "<a>Professor</a>"
+        self.write_artifacts()
+        LOADER.load_artifacts(None, self.root)
+        entity["relationships"][1]["evidence"][0]["field"] = "customFields.rJQmj"
+        self.write_artifacts()
+        with self.assertRaisesRegex(ValueError, "Program faculty relationships do not match"):
             LOADER.load_artifacts(None, self.root)
 
     def test_matching_trio_preserves_payloads_and_original_collection_time(self):
