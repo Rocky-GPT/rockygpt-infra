@@ -13,6 +13,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Environment sync safety and recovery
+        run: python3 -m unittest discover -s tests -p test_environment_sync.py
+
       # The split scripts rebuild whole directories; a syntax error in one is
       # discovered at the worst possible moment otherwise.
       - name: Shell syntax
