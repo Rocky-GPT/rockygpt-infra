@@ -47,6 +47,18 @@ def selected_values(variables, keys):
     return {key: values[key] for key in keys}
 
 
+def desired_values(variables, target):
+    """Secrets come from 1Password; approved public settings are versioned here."""
+    allowed = {"render": {"BRAIN_ENVIRONMENT", "BRAIN_OPENAI_PROJECT", "BRAIN_ROUTING_MODE", "BRAIN_ROUTING_PROVIDER"},
+               "vercel": {"BRAIN_URL"}}
+    settings = target.get("settings", {})
+    require(isinstance(settings, dict) and set(settings) <= allowed.get(target["provider"], set()),
+            "Unapproved variable in public settings")
+    require(not set(settings).intersection(target["keys"]), "Secret and setting names overlap")
+    require(all(isinstance(value, str) and value for value in settings.values()), "A public setting is empty")
+    return selected_values(variables, target["keys"]) | settings
+
+
 class API:
     def __init__(self, base, token, query=None):
         self.base, self.token, self.query = base, token, query or {}
@@ -286,7 +298,7 @@ async def main(args):
         for target in targets:
             require(target["provider"] in {"render", "vercel"}, "Unsupported provider")
             source = await client.environments.get_variables(target["environment_id"])
-            values = selected_values(source.variables, target["keys"])
+            values = desired_values(source.variables, target)
             provider = (Render(target, credentials["RENDER_API_KEY"]) if target["provider"] == "render"
                         else Vercel(target, credentials["VERCEL_TOKEN"]))
             prepared.append((target, values, provider))

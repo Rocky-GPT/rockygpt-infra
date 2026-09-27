@@ -101,6 +101,27 @@ class SyncTests(unittest.TestCase):
             with self.assertRaises(SYNC.SyncError):
                 SYNC.selected_values(variables, ["KEY"])
 
+    def test_public_settings_are_not_required_in_the_secret_store(self):
+        target = {"provider": "vercel", "keys": ["ABUSE_HASH_KEY"],
+                  "settings": {"BRAIN_URL": "https://brain.example"}}
+        values = SYNC.desired_values([SimpleNamespace(name="ABUSE_HASH_KEY", value="secret")], target)
+        self.assertEqual(values, {"ABUSE_HASH_KEY": "secret", "BRAIN_URL": "https://brain.example"})
+
+    def test_obsolete_password_manager_settings_cannot_override_versioned_settings(self):
+        target = {"provider": "vercel", "keys": ["ABUSE_HASH_KEY"],
+                  "settings": {"BRAIN_URL": "https://brain.example"}}
+        values = SYNC.desired_values([SimpleNamespace(name="ABUSE_HASH_KEY", value="secret"),
+                                     SimpleNamespace(name="BRAIN_URL", value="https://obsolete.example")], target)
+        self.assertEqual(values["BRAIN_URL"], "https://brain.example")
+
+    def test_secret_cannot_be_replaced_with_a_public_config_value(self):
+        for settings in ({"ABUSE_HASH_KEY": "unsafe"}, {"BRAIN_URL": ""}):
+            with self.assertRaises(SYNC.SyncError):
+                SYNC.desired_values([], {"provider": "vercel", "keys": ["ABUSE_HASH_KEY"], "settings": settings})
+        with self.assertRaises(SYNC.SyncError):
+            SYNC.desired_values([], {"provider": "vercel", "keys": ["BRAIN_URL"],
+                                    "settings": {"BRAIN_URL": "https://brain.example"}})
+
     def test_dry_run_does_not_write_or_deploy(self):
         p, state = Provider({}), {}
         self.run_sync(p, state, apply=False)
