@@ -1,14 +1,17 @@
 # 1Password production environment sync
 
-The `Environment Sync` workflow copies explicitly managed values from 1Password
-Environments to Render and Vercel. It runs every 30 minutes when the repository
+The `Environment Sync` workflow combines secrets from 1Password Environments
+with public settings in `config/environment-sync.json`, then updates Render and
+Vercel. It runs every 30 minutes when the repository
 variable `ENV_SYNC_ENABLED` is `true`. GitHub schedules can be delayed.
 
 Scheduled writes require **verified credentials, enabled target flags, and a
 successful first live run before setting `ENV_SYNC_ENABLED=true`**. See
 `config/environment-sync.json` for the source Environment
-IDs and explicit destination/key allowlists. Never put variable values in that
-file. Preview, staging, local files, and unrelated hosting variables are outside
+IDs and explicit destination/key allowlists. `keys` names only secrets; `settings`
+contains approved public configuration such as the Brain URL, environment name,
+OpenAI project ID, and routing mode. Never put a credential in that file.
+Preview, staging, local files, and unrelated hosting variables are outside
 this production sync. Removing a source variable does not delete it remotely;
 missing or empty managed values stop the run instead.
 
@@ -61,6 +64,12 @@ production smoke monitor remains independent. Do not claim activation based
 only on passing unit tests or creating credentials.
 
 ## Updating a secret
+
+1Password stores four production Brain credentials, one UI hashing secret, and
+the two hosting credentials in the automation Environment. Public settings are
+edited in the manifest and promoted to `main`; they do not need duplicate
+entries in 1Password. Render and Vercel retain both the settings and credentials
+that their running applications require.
 
 Create the replacement credential at its issuing service, update its value in
 the appropriate 1Password Environment, and let the job copy it to hosting. The
