@@ -2,5 +2,7 @@
 *.tfstate
 *.tfstate.*
 .terraform/
+.sync-state/
+__pycache__/
 .env*
 !.env.example
