@@ -1,0 +1,24 @@
+{
+  "credentials_environment": "et52npn7zeoraewdfatzhcftbm",
+  "targets": [
+    {
+      "name": "brain-production",
+      "provider": "render",
+      "enabled": false,
+      "environment_id": "q67qwjjknjx6nqrbzdus6sa3vi",
+      "service_id": "srv-da4bgkjbc2fs73cfcdm0",
+      "readiness_url": "https://rockygpt-brain.onrender.com/readiness",
+      "keys": ["BRAIN_ENVIRONMENT", "BRAIN_LEDGER_DATABASE_URL", "BRAIN_OPENAI_API_KEY", "BRAIN_OPENAI_PROJECT", "BRAIN_ROUTING_MODE", "BRAIN_TYPESAFE_API_KEY", "DATABASE_URL"]
+    },
+    {
+      "name": "ui-production",
+      "provider": "vercel",
+      "enabled": false,
+      "environment_id": "fkpcnrvsrpnkoiswvdmvkvuupi",
+      "team_slug": "daniel-rajakumars-projects",
+      "project": "rockygpt",
+      "readiness_url": "https://rockygpt.danielrajakumar.com/api/readiness",
+      "keys": ["ABUSE_HASH_KEY", "BRAIN_URL"]
+    }
+  ]
+}

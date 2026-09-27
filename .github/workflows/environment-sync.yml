@@ -1,0 +1,73 @@
+name: Environment Sync
+
+on:
+  schedule:
+    - cron: '13,43 * * * *'
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: Apply changes and deploy the current production code
+        type: boolean
+        default: false
+      bootstrap:
+        description: First Vercel sync from reviewed 1Password values
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: production-environment-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    # Enable only after credentials and the initial dry run have been verified.
+    if: github.ref == 'refs/heads/main' && (vars.ENV_SYNC_ENABLED == 'true' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    environment: production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - name: Verify sync guards
+        run: python -m unittest discover -s tests -p test_environment_sync.py
+      - name: Install the pinned 1Password SDK
+        run: python -m pip install -r scripts/environment-sync-requirements.txt
+      - name: Locate the previous checkpoint
+        id: previous
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/sync-checkpoint.py
+      - name: Restore the previous checkpoint
+        if: steps.previous.outputs.run_id != ''
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          name: environment-sync-state
+          path: .sync-state
+          run-id: ${{ steps.previous.outputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Sync managed production variables
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          APPLY_SYNC: ${{ github.event_name == 'schedule' || inputs.apply }}
+          BOOTSTRAP_SYNC: ${{ inputs.bootstrap }}
+        run: |
+          args=()
+          if [ "$APPLY_SYNC" = true ]; then args+=(--apply); fi
+          if [ "$BOOTSTRAP_SYNC" = true ]; then args+=(--bootstrap); fi
+          python scripts/sync-environments.py "${args[@]}"
+      - name: Save checkpoint even after partial failure
+        if: always() && hashFiles('.sync-state/state.json') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: environment-sync-state
+          path: .sync-state/state.json
+          retention-days: 90
+          if-no-files-found: error
