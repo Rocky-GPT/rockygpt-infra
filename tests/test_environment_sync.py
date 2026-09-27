@@ -208,6 +208,17 @@ class SyncTests(unittest.TestCase):
         self.assertNotIn("deploymentId", body)
         self.assertEqual(p.api.call.call_args.kwargs["query"], {"forceNew": "1"})
 
+    def test_sensitive_vercel_update_only_sends_value(self):
+        p = self.vercel([{"id": "env-1", "key": "KEY", "target": ["production"], "type": "sensitive"}])
+        p.changes({"KEY": "new"}, {}, "revision", True)
+        p.put("KEY", "new")
+        self.assertEqual(p.api.call.call_args.args, ("PATCH", "/v9/projects/test/env/env-1", {"value": "new"}))
+
+    def test_vercel_rejects_lost_sensitive_protection(self):
+        p = self.vercel([{"id": "env-1", "key": "KEY", "target": ["production"], "type": "plain"}])
+        with self.assertRaisesRegex(SYNC.SyncError, "must be Sensitive"):
+            p.changes({"KEY": "secret"}, {}, "revision", True)
+
     def test_vercel_skips_unchanged_and_detects_server_side_edits(self):
         p = self.vercel([{"key": "KEY", "target": ["production"], "id": "env-1", "updatedAt": 3, "type": "sensitive"}])
         desired = {"KEY": "secret"}

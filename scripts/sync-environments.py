@@ -141,6 +141,8 @@ class Vercel:
             if key in self.envs:
                 require(self.envs[key]["target"] == ["production"],
                         "A managed Vercel variable is shared with preview; split its scope before syncing")
+                require(self.envs[key].get("type") == "sensitive",
+                        "A managed Vercel variable must be Sensitive before syncing")
         require(bool(previous) or bootstrap,
                 "Vercel has no trusted sync state; a reviewed bootstrap run is required")
         # Sensitive values cannot be retrieved. A server-side edit invalidates
@@ -171,7 +173,10 @@ class Vercel:
     def put(self, key, value):
         body = {"key": key, "value": value, "type": "sensitive", "target": ["production"]}
         if key in self.envs:
-            self.api.call("PATCH", f"/v9/projects/{self.project}/env/" + quote(self.envs[key]["id"], safe=""), body)
+            # Vercel rejects the key field for a Sensitive variable, even when
+            # the name is unchanged. Preserve its existing name/type/scope.
+            self.api.call("PATCH", f"/v9/projects/{self.project}/env/" + quote(self.envs[key]["id"], safe=""),
+                          {"value": value})
         else:
             self.api.call("POST", f"/v10/projects/{self.project}/env", body)
 
