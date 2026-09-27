@@ -8,7 +8,8 @@ variable `ENV_SYNC_ENABLED` is `true`. GitHub schedules can be delayed.
 Scheduled writes require **verified credentials, enabled target flags, and a
 successful first live run before setting `ENV_SYNC_ENABLED=true`**. See
 `config/environment-sync.json` for the source Environment
-IDs and explicit destination/key allowlists. `keys` names only secrets; `settings`
+IDs and explicit destination/key allowlists. Each entry in `sources` maps an
+Environment ID to its required `keys`; duplicate key assignments are rejected. `settings`
 contains approved public configuration such as the Brain URL, environment name,
 OpenAI project ID, and routing mode. Never put a credential in that file.
 Preview, staging, local files, and unrelated hosting variables are outside
@@ -23,9 +24,9 @@ There is no migration to a second set of vault items.
 
 The service account has read-only access to these three Environments only:
 
-- `RockyGPT - Production - Brain (Render)`
-- `RockyGPT - Production - UI (Vercel)`
-- `RockyGPT - Automation - Environment Sync`
+- `RockyGPT - Shared` (OpenAI key, Typesafe/Jev key, campus database connection)
+- `RockyGPT - Production` (production ledger connection, UI hash key)
+- `RockyGPT - Automation` (hosting API tokens)
 
 It has no vault access and cannot create vaults. The automation Environment
 stores `RENDER_API_KEY` and `VERCEL_TOKEN`. Vercel's token should be scoped to
@@ -65,8 +66,17 @@ only on passing unit tests or creating credentials.
 
 ## Updating a secret
 
-1Password stores four production Brain credentials, one UI hashing secret, and
-the two hosting credentials in the automation Environment. Public settings are
+1Password stores each matching credential once. The Shared Environment provides
+the two API keys to both local and production Brain, and the campus database
+connection to Data and production Brain. Local Brain keeps its distinct campus
+and ledger connections in Local Brain; artifact credentials stay in Data Storage.
+The Production Environment holds the production ledger connection and UI hashing
+secret. Automation holds the two hosting API tokens. There are eleven stored
+credentials across these five groups. The existing service account retains the
+same three Environment IDs and read-only permissions.
+
+The sync reads each source once and selects keys per consumer; it never merges
+whole Environments or uses an implicit override order. Public settings are
 edited in the manifest and promoted to `main`; they do not need duplicate
 entries in 1Password. Render and Vercel retain both the settings and credentials
 that their running applications require.
