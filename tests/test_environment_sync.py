@@ -101,26 +101,50 @@ class SyncTests(unittest.TestCase):
             with self.assertRaises(SYNC.SyncError):
                 SYNC.selected_values(variables, ["KEY"])
 
+    def source_target(self):
+        return {"provider": "vercel", "sources": [{"environment_id": "shared", "keys": ["ABUSE_HASH_KEY"]}],
+                "settings": {"BRAIN_URL": "https://brain.example"}}
+
     def test_public_settings_are_not_required_in_the_secret_store(self):
-        target = {"provider": "vercel", "keys": ["ABUSE_HASH_KEY"],
-                  "settings": {"BRAIN_URL": "https://brain.example"}}
-        values = SYNC.desired_values([SimpleNamespace(name="ABUSE_HASH_KEY", value="secret")], target)
+        values = SYNC.desired_values({"shared": [SimpleNamespace(name="ABUSE_HASH_KEY", value="secret")]}, self.source_target())
         self.assertEqual(values, {"ABUSE_HASH_KEY": "secret", "BRAIN_URL": "https://brain.example"})
 
     def test_obsolete_password_manager_settings_cannot_override_versioned_settings(self):
-        target = {"provider": "vercel", "keys": ["ABUSE_HASH_KEY"],
-                  "settings": {"BRAIN_URL": "https://brain.example"}}
-        values = SYNC.desired_values([SimpleNamespace(name="ABUSE_HASH_KEY", value="secret"),
-                                     SimpleNamespace(name="BRAIN_URL", value="https://obsolete.example")], target)
+        values = SYNC.desired_values({"shared": [SimpleNamespace(name="ABUSE_HASH_KEY", value="secret"),
+                                     SimpleNamespace(name="BRAIN_URL", value="https://obsolete.example")]}, self.source_target())
         self.assertEqual(values["BRAIN_URL"], "https://brain.example")
 
     def test_secret_cannot_be_replaced_with_a_public_config_value(self):
         for settings in ({"ABUSE_HASH_KEY": "unsafe"}, {"BRAIN_URL": ""}):
+            target = self.source_target()
+            target["settings"] = settings
             with self.assertRaises(SYNC.SyncError):
-                SYNC.desired_values([], {"provider": "vercel", "keys": ["ABUSE_HASH_KEY"], "settings": settings})
+                SYNC.desired_values({"shared": [SimpleNamespace(name="ABUSE_HASH_KEY", value="secret")]}, target)
+        target = self.source_target()
+        target["sources"][0]["keys"] = ["BRAIN_URL"]
         with self.assertRaises(SYNC.SyncError):
-            SYNC.desired_values([], {"provider": "vercel", "keys": ["BRAIN_URL"],
-                                    "settings": {"BRAIN_URL": "https://brain.example"}})
+            SYNC.desired_values({"shared": [SimpleNamespace(name="BRAIN_URL", value="https://brain.example")]}, target)
+
+    def test_each_secret_comes_only_from_its_assigned_source(self):
+        target = {"provider": "render", "sources": [
+            {"environment_id": "shared", "keys": ["DATABASE_URL", "BRAIN_OPENAI_API_KEY"]},
+            {"environment_id": "production", "keys": ["BRAIN_LEDGER_DATABASE_URL"]}]}
+        sources = {"shared": [SimpleNamespace(name="DATABASE_URL", value="campus"),
+                              SimpleNamespace(name="BRAIN_OPENAI_API_KEY", value="api"),
+                              SimpleNamespace(name="BRAIN_LEDGER_DATABASE_URL", value="obsolete")],
+                   "production": [SimpleNamespace(name="BRAIN_LEDGER_DATABASE_URL", value="ledger"),
+                                  SimpleNamespace(name="ABUSE_HASH_KEY", value="not-for-brain")]}
+        self.assertEqual(SYNC.desired_values(sources, target),
+                         {"DATABASE_URL": "campus", "BRAIN_OPENAI_API_KEY": "api", "BRAIN_LEDGER_DATABASE_URL": "ledger"})
+        sources["production"] = []
+        with self.assertRaises(SYNC.SyncError):
+            SYNC.desired_values(sources, target)
+
+    def test_duplicate_source_assignment_is_rejected(self):
+        target = self.source_target()
+        target["sources"].append({"environment_id": "another", "keys": ["ABUSE_HASH_KEY"]})
+        with self.assertRaises(SYNC.SyncError):
+            SYNC.desired_values({"shared": [SimpleNamespace(name="ABUSE_HASH_KEY", value="secret")]}, target)
 
     def test_dry_run_does_not_write_or_deploy(self):
         p, state = Provider({}), {}
