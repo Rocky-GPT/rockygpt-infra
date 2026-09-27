@@ -69,5 +69,6 @@ jobs:
         with:
           name: environment-sync-state
           path: .sync-state/state.json
+          include-hidden-files: true
           retention-days: 90
           if-no-files-found: error
