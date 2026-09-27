@@ -47,16 +47,23 @@ def selected_values(variables, keys):
     return {key: values[key] for key in keys}
 
 
-def desired_values(variables, target):
+def desired_values(sources, target):
     """Secrets come from 1Password; approved public settings are versioned here."""
+    values = {}
+    require(bool(target["sources"]), "No secret sources configured")
+    for source in target["sources"]:
+        keys = source["keys"]
+        require(bool(keys) and len(set(keys)) == len(keys), "Invalid secret source keys")
+        require(not set(values).intersection(keys), "Duplicate secret source mapping")
+        values.update(selected_values(sources[source["environment_id"]], keys))
     allowed = {"render": {"BRAIN_ENVIRONMENT", "BRAIN_OPENAI_PROJECT", "BRAIN_ROUTING_MODE", "BRAIN_ROUTING_PROVIDER"},
                "vercel": {"BRAIN_URL"}}
     settings = target.get("settings", {})
     require(isinstance(settings, dict) and set(settings) <= allowed.get(target["provider"], set()),
             "Unapproved variable in public settings")
-    require(not set(settings).intersection(target["keys"]), "Secret and setting names overlap")
+    require(not set(settings).intersection(values), "Secret and setting names overlap")
     require(all(isinstance(value, str) and value for value in settings.values()), "A public setting is empty")
-    return selected_values(variables, target["keys"]) | settings
+    return values | settings
 
 
 class API:
@@ -295,10 +302,15 @@ async def main(args):
         credentials = selected_values(credentials.variables, required_tokens)
         # Validate every enabled source before the first external write.
         prepared = []
+        sources = {}
         for target in targets:
             require(target["provider"] in {"render", "vercel"}, "Unsupported provider")
-            source = await client.environments.get_variables(target["environment_id"])
-            values = desired_values(source.variables, target)
+            for source in target["sources"]:
+                environment_id = source["environment_id"]
+                if environment_id not in sources:
+                    result = await client.environments.get_variables(environment_id)
+                    sources[environment_id] = result.variables
+            values = desired_values(sources, target)
             provider = (Render(target, credentials["RENDER_API_KEY"]) if target["provider"] == "render"
                         else Vercel(target, credentials["VERCEL_TOKEN"]))
             prepared.append((target, values, provider))
