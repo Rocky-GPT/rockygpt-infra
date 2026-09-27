@@ -4,7 +4,7 @@
     {
       "name": "brain-production",
       "provider": "render",
-      "enabled": false,
+      "enabled": true,
       "environment_id": "q67qwjjknjx6nqrbzdus6sa3vi",
       "service_id": "srv-da4bgkjbc2fs73cfcdm0",
       "readiness_url": "https://rockygpt-brain.onrender.com/readiness",
@@ -13,7 +13,7 @@
     {
       "name": "ui-production",
       "provider": "vercel",
-      "enabled": false,
+      "enabled": true,
       "environment_id": "fkpcnrvsrpnkoiswvdmvkvuupi",
       "team_slug": "daniel-rajakumars-projects",
       "project": "rockygpt",

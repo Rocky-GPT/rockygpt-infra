@@ -179,7 +179,8 @@ class Vercel:
         # deploymentId can reuse the original environment. A pinned Git source
         # rebuilds the live code using the newly configured project variables.
         result = self.api.call("POST", "/v13/deployments", {"name": self.target["project"],
-                               "project": self.target["project"], "target": "production", "gitSource": base})
+                               "project": self.target["project"], "target": "production", "gitSource": base},
+                               query={"forceNew": "1"})
         return result["id"]
 
     def status(self, deployment):
@@ -228,7 +229,7 @@ def sync_target(target, desired, provider, state, state_path, secret, apply=Fals
                 save_state(state_path, state)
     changes = provider.changes(desired, previous, revision, bootstrap)
     pending = previous.get("pending", False)
-    print(f"{name}: {len(changes)} managed variables differ; deployment pending: {pending}")
+    print(f"{name}: {len(changes)} managed variables need syncing; deployment pending: {pending}")
     if not apply:
         return
     if not changes and not pending:

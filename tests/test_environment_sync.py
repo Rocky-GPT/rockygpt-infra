@@ -198,6 +198,16 @@ class SyncTests(unittest.TestCase):
         with self.assertRaisesRegex(SYNC.SyncError, "bootstrap"):
             p.changes({"KEY": "new"}, {}, "revision", False)
 
+    def test_vercel_rebuilds_pinned_code_with_fresh_project_environment(self):
+        p = self.vercel([])
+        p.api.call.return_value = {"id": "dpl-test"}
+        source = {"type": "github", "repoId": 123, "ref": "a" * 40, "sha": "a" * 40}
+        self.assertEqual(p.deploy(source), "dpl-test")
+        body = p.api.call.call_args.args[2]
+        self.assertEqual(body["gitSource"], source)
+        self.assertNotIn("deploymentId", body)
+        self.assertEqual(p.api.call.call_args.kwargs["query"], {"forceNew": "1"})
+
     def test_vercel_skips_unchanged_and_detects_server_side_edits(self):
         p = self.vercel([{"key": "KEY", "target": ["production"], "id": "env-1", "updatedAt": 3, "type": "sensitive"}])
         desired = {"KEY": "secret"}
