@@ -4,8 +4,9 @@ The `Environment Sync` workflow copies explicitly managed values from 1Password
 Environments to Render and Vercel. It runs every 30 minutes when the repository
 variable `ENV_SYNC_ENABLED` is `true`. GitHub schedules can be delayed.
 
-The setup is **disabled until the credentials, target flags, and first live run
-are verified**. See `config/environment-sync.json` for the source Environment
+Scheduled writes require **verified credentials, enabled target flags, and a
+successful first live run before setting `ENV_SYNC_ENABLED=true`**. See
+`config/environment-sync.json` for the source Environment
 IDs and explicit destination/key allowlists. Never put variable values in that
 file. Preview, staging, local files, and unrelated hosting variables are outside
 this production sync. Removing a source variable does not delete it remotely;
