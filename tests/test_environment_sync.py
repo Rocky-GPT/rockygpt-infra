@@ -4,6 +4,7 @@ import contextlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace
@@ -13,6 +14,42 @@ from unittest.mock import Mock, patch
 SPEC = importlib.util.spec_from_file_location("sync", Path(__file__).resolve().parents[1] / "scripts/sync-environments.py")
 SYNC = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(SYNC)
+CHECKPOINT_SPEC = importlib.util.spec_from_file_location("checkpoint", Path(__file__).resolve().parents[1] / "scripts/sync-checkpoint.py")
+CHECKPOINT = importlib.util.module_from_spec(CHECKPOINT_SPEC)
+CHECKPOINT_SPEC.loader.exec_module(CHECKPOINT)
+
+
+class CheckpointTests(unittest.TestCase):
+    def run_checkpoint(self, responses):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "output"
+            with patch.dict(os.environ, {"GITHUB_REPOSITORY": "owner/repo", "GITHUB_RUN_ID": "9", "GITHUB_OUTPUT": str(output)}):
+                with patch.object(CHECKPOINT, "api", side_effect=responses):
+                    CHECKPOINT.main()
+            return output.read_text() if output.exists() else ""
+
+    def test_restores_latest_completed_trusted_workflow_checkpoint(self):
+        runs = {"workflow_runs": [{"id": 9}, {"id": 8, "event": "schedule", "status": "completed", "conclusion": "failure"}]}
+        artifacts = {"artifacts": [{"name": "environment-sync-state", "expired": False}]}
+        self.assertEqual(self.run_checkpoint([runs, artifacts]), "run_id=8\n")
+
+    def test_pr_runs_cannot_supply_production_checkpoints(self):
+        runs = {"workflow_runs": [{"id": 8, "event": "pull_request"}]}
+        self.assertEqual(self.run_checkpoint([runs]), "")
+
+    def test_expired_checkpoint_fails_closed(self):
+        runs = {"workflow_runs": [{"id": 8, "event": "schedule", "status": "completed"}]}
+        artifacts = {"artifacts": [{"name": "environment-sync-state", "expired": True}]}
+        with self.assertRaisesRegex(RuntimeError, "expired"):
+            self.run_checkpoint([runs, artifacts])
+
+    def test_cancelled_run_without_checkpoint_requires_review(self):
+        runs = {"workflow_runs": [{"id": 8, "event": "schedule", "status": "completed", "conclusion": "cancelled"}]}
+        with self.assertRaisesRegex(RuntimeError, "interrupted"):
+            self.run_checkpoint([runs, {"artifacts": []}])
+
+    def test_first_run_needs_no_existing_checkpoint(self):
+        self.assertEqual(self.run_checkpoint([{"workflow_runs": [{"id": 9}]}]), "")
 
 
 class Provider:
