@@ -195,8 +195,9 @@ def main() -> None:
         raise ValueError("Only the existing development Brain environment may be launched")
     revision = committed_revision(brain, args.revision)
     build = immutable_build(brain, feature / "brain-builds", revision)
+    # BRAIN_REVISION tells the Dev control room which commit answered each turn.
     runtime_env = {**os.environ, **values, "PYTHONPATH": str(build / "src"), "PYTHONDONTWRITEBYTECODE": "1",
-                   "PYTHON_DOTENV_DISABLED": "1"}
+                   "PYTHON_DOTENV_DISABLED": "1", "BRAIN_REVISION": revision}
     for key in ("BRAIN_EXPECTED_CONFIG_HASH", "STAGING_SERVICE_TOKEN", "OPENAI_CHAT_MODEL"):
         runtime_env.pop(key, None)
     fingerprint = json.loads(subprocess.check_output([
