@@ -104,8 +104,10 @@ uncommitted files are never included in the archive.
 Before restarting, it verifies the local reader and expected dataset, imports
 the configuration from the archive, and checks the saved PID's command and
 working directory. It sends SIGTERM only to that local Brain PID, allows graceful
-shutdown, and refuses to kill another process on port 8000. It changes only
-`DATABASE_URL` and `BRAIN_EXPECTED_CONFIG_HASH` in the ignored Brain `.env`;
+shutdown, and refuses to kill another process on port 8000. It reads the Brain's
+settings and secrets through the workspace launcher from the owner-only
+`rockygpt-brain/.env.local` (create it once with `local-env.py --seed brain`), so
+it never waits on a 1Password prompt. It changes only `DATABASE_URL` in that file;
 the development provider and accounting settings remain unchanged. The original
 environment backup at `../.local-logs/profile-feature/brain.env.before` is retained.
 

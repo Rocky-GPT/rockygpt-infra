@@ -89,5 +89,41 @@ class ImmutableArchiveTests(unittest.TestCase):
                 LOADER.immutable_build(Path(temporary), Path(temporary) / "builds", "a" * 40)
 
 
+FAKE_LAUNCHER = """
+from pathlib import Path
+CALLS = []
+def service_config(service, root):
+    return {"local_file": "rockygpt-brain/.env.local"}, ["DATABASE_URL"]
+def load_environment(service, root):
+    CALLS.append(service)
+    return {"BRAIN_ENVIRONMENT": "development", "DATABASE_URL": "local-db"}
+"""
+
+
+class BrainEnvironmentTests(unittest.TestCase):
+    def workspace(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        (root / "local-env.py").write_text(FAKE_LAUNCHER)
+        (root / "rockygpt-brain").mkdir()
+        return root
+
+    def test_deploy_requires_the_seeded_local_file_instead_of_1password(self):
+        root = self.workspace()
+        with self.assertRaisesRegex(ValueError, "--seed brain"):
+            LOADER.brain_environment(root)
+        os.mkfifo(root / "rockygpt-brain/.env.local")
+        with self.assertRaisesRegex(ValueError, "--seed brain"):
+            LOADER.brain_environment(root)
+
+    def test_deploy_reads_settings_and_secrets_through_the_launcher(self):
+        root = self.workspace()
+        (root / "rockygpt-brain/.env.local").write_text("DATABASE_URL='local-db'\n")
+        values, path = LOADER.brain_environment(root)
+        self.assertEqual(values["BRAIN_ENVIRONMENT"], "development")
+        self.assertEqual(path, root / "rockygpt-brain/.env.local")
+
+
 if __name__ == "__main__":
     unittest.main()

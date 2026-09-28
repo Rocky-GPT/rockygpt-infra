@@ -6,6 +6,7 @@ the mutable working tree. No branch changes, production writes, or force kills.
 
 import argparse
 import hashlib
+import importlib.util
 import io
 import json
 import os
@@ -25,7 +26,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import psycopg
-from dotenv import dotenv_values, set_key
+from dotenv import set_key
 from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
 
@@ -44,6 +45,22 @@ def runtime_database(value: str) -> dict[str, str]:
     ):
         raise ValueError("Require a named localhost profile database and brain_campus_reader")
     return {**parts, "hostaddr": "127.0.0.1", "sslmode": "disable"}
+
+
+def brain_environment(workspace: Path) -> tuple[dict[str, str], Path]:
+    """Load Brain settings and secrets through the workspace launcher.
+
+    Requires the owner-only local secrets file, so a deploy never waits on a
+    1Password prompt or rewrites a 1Password mount.
+    """
+    spec = importlib.util.spec_from_file_location("local_env", workspace / "local-env.py")
+    launcher = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(launcher)
+    config, _ = launcher.service_config("brain", workspace)
+    local = config.get("local_file")
+    if not local or not (workspace / local).is_file():
+        raise ValueError("Seed the local Brain secrets first: local-env.py --seed brain")
+    return launcher.load_environment("brain", workspace), workspace / local
 
 
 def committed_revision(brain: Path, value: str) -> str:
@@ -169,19 +186,19 @@ def main() -> None:
     args = parser.parse_args()
     workspace = Path(__file__).resolve().parents[2]
     brain = workspace / "rockygpt-brain"
-    environment_path = brain / ".env"
     feature = workspace / ".local-logs/profile-feature"
     database = runtime_database(args.database)
     if not args.expected_dataset.startswith("dev-profiles-"):
         raise ValueError("Require the expected dev-profiles dataset version")
-    values = dotenv_values(environment_path)
+    values, environment_path = brain_environment(workspace)
     if values.get("BRAIN_ENVIRONMENT") != "development":
         raise ValueError("Only the existing development Brain environment may be launched")
     revision = committed_revision(brain, args.revision)
     build = immutable_build(brain, feature / "brain-builds", revision)
-    runtime_env = {**os.environ, **{key: value for key, value in values.items() if value is not None},
-                   "PYTHONPATH": str(build / "src"), "PYTHONDONTWRITEBYTECODE": "1"}
-    runtime_env.pop("BRAIN_EXPECTED_CONFIG_HASH", None)
+    runtime_env = {**os.environ, **values, "PYTHONPATH": str(build / "src"), "PYTHONDONTWRITEBYTECODE": "1",
+                   "PYTHON_DOTENV_DISABLED": "1"}
+    for key in ("BRAIN_EXPECTED_CONFIG_HASH", "STAGING_SERVICE_TOKEN", "OPENAI_CHAT_MODEL"):
+        runtime_env.pop(key, None)
     fingerprint = json.loads(subprocess.check_output([
         str(brain / ".venv/bin/python"), "-c",
         "import json,rockygpt_brain; from rockygpt_brain.config import configuration_hash,RELEASE; "
@@ -204,9 +221,8 @@ def main() -> None:
         backup.chmod(0o600)
     pid_file = workspace / ".local-logs/pids/brain.pid"
     stop_owned_brain(pid_file, brain)
-    # Only these two deployment-owned values change; provider/ledger settings remain intact.
+    # Only the database changes, so run-local.sh restarts on the deployed release.
     set_key(environment_path, "DATABASE_URL", database_url)
-    set_key(environment_path, "BRAIN_EXPECTED_CONFIG_HASH", fingerprint["configurationHash"])
     runtime_env.update(DATABASE_URL=database_url, BRAIN_EXPECTED_CONFIG_HASH=fingerprint["configurationHash"])
     with (workspace / ".local-logs/brain.log").open("ab") as log:
         process = subprocess.Popen([
