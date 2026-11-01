@@ -1,5 +1,5 @@
 {
-  "credentials_environment": "et52npn7zeoraewdfatzhcftbm",
+  "credentials_environment": "q67qwjjknjx6nqrbzdus6sa3vi",
   "targets": [
     {
       "name": "brain-production",
@@ -8,8 +8,16 @@
       "service_id": "srv-da4bgkjbc2fs73cfcdm0",
       "readiness_url": "https://rockygpt-brain.onrender.com/readiness",
       "sources": [
-        {"environment_id": "q67qwjjknjx6nqrbzdus6sa3vi", "keys": ["BRAIN_OPENAI_API_KEY", "BRAIN_TYPESAFE_API_KEY", "DATABASE_URL"]},
-        {"environment_id": "fkpcnrvsrpnkoiswvdmvkvuupi", "keys": ["BRAIN_LEDGER_DATABASE_URL", "STAGING_SERVICE_TOKEN"]}
+        {
+          "environment_id": "q67qwjjknjx6nqrbzdus6sa3vi",
+          "keys": {
+            "BRAIN_OPENAI_API_KEY": "BRAIN_OPENAI_API_KEY",
+            "BRAIN_TYPESAFE_API_KEY": "BRAIN_TYPESAFE_API_KEY",
+            "DATABASE_URL": "PRODUCTION_DATABASE_URL",
+            "BRAIN_LEDGER_DATABASE_URL": "PRODUCTION_LEDGER_DATABASE_URL",
+            "STAGING_SERVICE_TOKEN": "PRODUCTION_SERVICE_TOKEN"
+          }
+        }
       ],
       "settings": {
         "BRAIN_ENVIRONMENT": "production",
@@ -28,7 +36,13 @@
       "project": "rockygpt",
       "readiness_url": "https://rockygpt.danielrajakumar.com/api/readiness",
       "sources": [
-        {"environment_id": "fkpcnrvsrpnkoiswvdmvkvuupi", "keys": ["ABUSE_HASH_KEY", "STAGING_SERVICE_TOKEN"]}
+        {
+          "environment_id": "q67qwjjknjx6nqrbzdus6sa3vi",
+          "keys": {
+            "ABUSE_HASH_KEY": "ABUSE_HASH_KEY",
+            "STAGING_SERVICE_TOKEN": "PRODUCTION_SERVICE_TOKEN"
+          }
+        }
       ],
       "settings": {
         "BRAIN_URL": "https://rockygpt-brain.onrender.com"

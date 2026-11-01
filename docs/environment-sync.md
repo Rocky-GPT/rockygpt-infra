@@ -1,6 +1,6 @@
 # 1Password production environment sync
 
-The `Environment Sync` workflow combines secrets from 1Password Environments
+The `Environment Sync` workflow selects secrets from the RockyGPT 1Password Environment
 with public settings in `config/environment-sync.json`, then updates Render and
 Vercel. It runs every 30 minutes when the repository
 variable `ENV_SYNC_ENABLED` is `true`. GitHub schedules can be delayed.
@@ -9,7 +9,9 @@ Scheduled writes require **verified credentials, enabled target flags, and a
 successful first live run before setting `ENV_SYNC_ENABLED=true`**. See
 `config/environment-sync.json` for the source Environment
 IDs and explicit destination/key allowlists. Each entry in `sources` maps an
-Environment ID to its required `keys`; duplicate key assignments are rejected. `settings`
+Environment ID to its required `keys`. A `keys` object maps destination names
+to stored names (for example, `DATABASE_URL` to `PRODUCTION_DATABASE_URL`);
+legacy identity lists are also supported. Duplicate destination assignments are rejected. `settings`
 contains approved public configuration such as the Brain URL, environment name,
 OpenAI project ID, and routing mode. Never put a credential in that file.
 Preview, staging, local files, and unrelated hosting variables are outside
@@ -22,17 +24,16 @@ The official `onepassword-sdk` reads the existing Environments directly. MCP
 continues to manage them interactively; unattended jobs use a service account.
 There is no migration to a second set of vault items.
 
-The service account has read-only access to these three Environments only:
+All runtime mappings use the **RockyGPT** Environment (ID
+`q67qwjjknjx6nqrbzdus6sa3vi`, formerly Shared). Reusing its ID preserves the
+existing service account's read access. The account can read the consolidated
+Environment, including local and storage secrets; the sync's explicit allowlists
+select only the hosting tokens and each production service's assigned values.
+It has no vault access and cannot create vaults.
 
-- `RockyGPT - Shared` (OpenAI key, Typesafe/Jev key, campus database connection)
-- `RockyGPT - Production` (production ledger connection, UI hash key)
-- `RockyGPT - Automation` (hosting API tokens)
-
-It has no vault access and cannot create vaults. The automation Environment
-stores `RENDER_API_KEY` and `VERCEL_TOKEN`. Vercel's token should be scoped to
-the `rockygpt` project. Render's API key has broader account access. Save a
-backup of the service-account token in the owner's private 1Password vault,
-outside the Environments the service account can read.
+`RENDER_API_KEY` and `VERCEL_TOKEN` live in the same Environment. Vercel's token
+should be scoped to the `rockygpt` project. Save a backup of the service-account
+token in the owner's private 1Password vault, outside the Environment it reads.
 
 Store that bootstrap token as `OP_SERVICE_ACCOUNT_TOKEN` in the GitHub
 repository's `production` environment. Never paste it into a workflow, issue,
@@ -66,23 +67,20 @@ only on passing unit tests or creating credentials.
 
 ## Updating a secret
 
-1Password stores each matching credential once. The Shared Environment provides
-the two API keys to both local and production Brain, and the campus database
-connection to Data and production Brain. Local Brain keeps its distinct campus
-and ledger connections in Local Brain; artifact credentials stay in Data Storage.
-The Production Environment holds the production ledger connection and UI hashing
-secret. Automation holds the two hosting API tokens. There are eleven stored
-credentials across these five groups. The existing service account retains the
-same three Environment IDs and read-only permissions.
+The RockyGPT Environment stores shared API keys once. Local and production
+databases use `LOCAL_DATABASE_URL`, `LOCAL_LEDGER_DATABASE_URL`,
+`PRODUCTION_DATABASE_URL`, and `PRODUCTION_LEDGER_DATABASE_URL`.
+`PRODUCTION_SERVICE_TOKEN` maps to the application's existing
+`STAGING_SERVICE_TOKEN` name. UI hashing, artifact storage and hosting API keys
+retain their service-specific names.
 
-The sync reads each source once and selects keys per consumer; it never merges
-whole Environments or uses an implicit override order. Public settings are
-edited in the manifest and promoted to `main`; they do not need duplicate
-entries in 1Password. Render and Vercel retain both the settings and credentials
-that their running applications require.
+The sync reads the Environment once and maps only each consumer's assigned
+keys. Local database and artifact credentials are never sent to Render or
+Vercel. Public settings remain in the manifest and are promoted to `main`;
+they do not need duplicate entries in 1Password.
 
 Create the replacement credential at its issuing service, update its value in
-the appropriate 1Password Environment, and let the job copy it to hosting. The
+the RockyGPT 1Password Environment, and let the job copy it to hosting. The
 sync does not create or rotate provider credentials itself. Make sure an old
 credential remains valid until the new deployment has passed readiness.
 

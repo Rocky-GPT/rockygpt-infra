@@ -66,7 +66,7 @@ From the infra repository, after compiling against the intended public snapshot:
 
 ```sh
 ../rockygpt-brain/.venv/bin/python scripts/clone-campus-for-dev.py \
-  --source-env ../rockygpt-data/.env \
+  --source-env ~/.config/rockygpt/rockygpt.env \
   --target postgresql://postgres@127.0.0.1:55434/rockygpt_profiles_dev_candidate \
   --data-root ../rockygpt-data \
   --artifact-dir /tmp/rockygpt-identities \
