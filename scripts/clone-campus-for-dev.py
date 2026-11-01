@@ -294,6 +294,8 @@ def expected_source(dataset: dict | None, expected_version: str | None) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-env", type=Path, required=True)
+    parser.add_argument("--source-key", default="PRODUCTION_DATABASE_URL",
+                        help="Database variable in the source environment")
     parser.add_argument("--target", required=True)
     parser.add_argument("--data-root", type=Path, required=True)
     artifact_input = parser.add_mutually_exclusive_group(required=True)
@@ -309,9 +311,9 @@ def main() -> None:
         raise ValueError("Version must identify a dev-profiles candidate")
     if args.report.exists():
         raise ValueError("Report already exists; preserve the earlier candidate report")
-    source_url = dotenv_values(args.source_env).get("DATABASE_URL")
+    source_url = dotenv_values(args.source_env, interpolate=False).get(args.source_key)
     if not source_url:
-        raise ValueError("The source environment must define DATABASE_URL")
+        raise ValueError("The source environment is missing the requested database variable")
     artifacts, artifact_hashes = load_artifacts(args.identity_artifact, args.artifact_dir)
     identity = artifacts["campus-identities"]
     identity_hash = artifact_hashes["campus-identities"]
