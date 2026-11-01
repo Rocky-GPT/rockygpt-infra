@@ -83,8 +83,9 @@ test no longer probes a campus-data service. Adding one back is what would turn
 a deliberate retirement into a monitor incident every six hours.
 
 The `Service Smoke` workflow runs the same check with repository secrets. It
-checks UI and Brain readiness and malformed chat
-handling without making a model call.
+checks UI and Brain readiness, that the Brain refuses chat without the shared
+service token (401 `unauthorized`), and, when `STAGING_SERVICE_TOKEN` is set,
+that a malformed chat body is rejected (422). None of it makes a model call.
 The restarted Brain exposes chat and probes; this smoke does not require the
 retired map or chat-log endpoints. Run the conversations in
 `rockygpt-evals/brain-reset` separately to verify answer quality.
