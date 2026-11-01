@@ -19,5 +19,6 @@ jobs:
         env:
           UI_URL: ${{ secrets.UI_URL }}
           BRAIN_URL: ${{ secrets.BRAIN_URL }}
+          STAGING_SERVICE_TOKEN: ${{ secrets.STAGING_SERVICE_TOKEN }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: node tests/service-smoke.mjs
