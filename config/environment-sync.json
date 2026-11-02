@@ -12,7 +12,6 @@
           "environment_id": "q67qwjjknjx6nqrbzdus6sa3vi",
           "keys": {
             "BRAIN_OPENAI_API_KEY": "BRAIN_OPENAI_API_KEY",
-            "BRAIN_TYPESAFE_API_KEY": "BRAIN_TYPESAFE_API_KEY",
             "DATABASE_URL": "PRODUCTION_DATABASE_URL",
             "BRAIN_LEDGER_DATABASE_URL": "PRODUCTION_LEDGER_DATABASE_URL",
             "STAGING_SERVICE_TOKEN": "PRODUCTION_SERVICE_TOKEN"
@@ -28,7 +27,11 @@
         "BRAIN_OPENAI_EMBED_MODEL": "text-embedding-3-large",
         "BRAIN_OPENAI_EMBED_INPUT_NUSD_PER_TOKEN": "130",
         "BRAIN_OPENAI_EMBED_PRICE_VALID_UNTIL": "2026-12-25T00:00:00+00:00"
-      }
+      },
+      "retired": [
+        "BRAIN_ROUTING_MODE",
+        "BRAIN_TYPESAFE_API_KEY"
+      ]
     },
     {
       "name": "ui-production",

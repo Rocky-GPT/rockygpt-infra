@@ -13,10 +13,10 @@ Environment ID to its required `keys`. A `keys` object maps destination names
 to stored names (for example, `DATABASE_URL` to `PRODUCTION_DATABASE_URL`);
 legacy identity lists are also supported. Duplicate destination assignments are rejected. `settings`
 contains approved public configuration such as the Brain URL, environment name,
-OpenAI project ID, and routing mode. Never put a credential in that file.
+and OpenAI project ID. Never put a credential in that file.
 Preview, staging, local files, and unrelated hosting variables are outside
-this production sync. Removing a source variable does not delete it remotely;
-missing or empty managed values stop the run instead.
+this production sync. Removing a source variable does not delete it remotely
+(list it under `retired` for that); missing or empty managed values stop the run instead.
 
 ## One manifest for production and the laptop
 
@@ -31,7 +31,14 @@ Every run also lists, by name only, the variables a target holds that the manife
 does not manage (set by hand in a dashboard, or left over from an old setting). They
 appear as a warning on the workflow run, because the laptop never sees them. Either
 manage the variable here or, if it is deliberately kept by hand, add its name to the
-target's `manual` list. The sync never deletes anything.
+target's `manual` list.
+
+To clear a variable nothing reads any more, take it out of `sources`/`settings` and add
+its name to the target's `retired` list. The next applied run deletes it from that
+target (and, for Render and Vercel, redeploys the live code so the old value is gone
+from the running service). Only names in `retired` are ever deleted; a retired name
+cannot also be managed or listed as `manual`. Leave the name in `retired` afterwards:
+it then stops a hand-typed copy from coming back unnoticed.
 
 ## GitHub Actions secrets
 
