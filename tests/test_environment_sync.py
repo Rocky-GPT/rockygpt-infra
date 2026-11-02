@@ -295,6 +295,145 @@ class SyncTests(unittest.TestCase):
         self.assertEqual(p.changes({"KEY": "same"}, {}, "revision", False), [])
         self.assertEqual(p.api.call.call_args.kwargs["query"]["cursor"], "c99")
 
+    # --- GitHub Actions secrets ---
+
+    def github(self, rows, environment=None):
+        target = {"name": "test", "repository": "Rocky-GPT/rockygpt-data"}
+        if environment:
+            target["environment"] = environment
+        p = SYNC.GitHub(target | {"manual": ["ARCHWAY_PASSWORD"]}, "token")
+        p.api = Mock()
+        p.api.call.return_value = {"secrets": rows}
+        return p
+
+    def test_github_requires_reviewed_bootstrap(self):
+        with self.assertRaisesRegex(SYNC.SyncError, "bootstrap"):
+            self.github([]).changes({"KEY": "new"}, {}, "revision", False)
+
+    def test_github_skips_unchanged_and_detects_edits_made_on_github(self):
+        p = self.github([{"name": "KEY", "updated_at": "2026-11-01T00:00:00Z"}])
+        p.changes({"KEY": "secret"}, {}, "revision", True)
+        previous = {"revision": "revision", "metadata": p.metadata({"KEY": "secret"})}
+        self.assertEqual(p.changes({"KEY": "secret"}, previous, "revision", False), [])
+        self.assertEqual(p.changes({"KEY": "secret"}, previous, "changed-source", False), ["KEY"])
+        p.api.call.return_value["secrets"][0]["updated_at"] = "2026-11-02T00:00:00Z"
+        self.assertEqual(p.changes({"KEY": "secret"}, previous, "revision", False), ["KEY"])
+
+    def test_github_environment_secrets_use_the_environment_path(self):
+        self.assertEqual(self.github([], "production").path,
+                         "/repos/Rocky-GPT/rockygpt-data/environments/production/secrets")
+        self.assertEqual(self.github([]).path, "/repos/Rocky-GPT/rockygpt-data/actions/secrets")
+
+    def test_github_put_sends_only_an_encrypted_value(self):
+        p = self.github([])
+        p.api.call.side_effect = [{"key": "cHVibGlj", "key_id": "id-1"}, None, None]
+        with patch.object(SYNC, "seal", side_effect=lambda key, value: f"sealed:{len(value)}"):
+            p.put("KEY", "secret-value")
+            p.put("OTHER", "x")
+        method, path, body = p.api.call.call_args_list[1].args
+        self.assertEqual((method, path), ("PUT", "/repos/Rocky-GPT/rockygpt-data/actions/secrets/KEY"))
+        self.assertEqual(body, {"encrypted_value": "sealed:12", "key_id": "id-1"})
+        self.assertEqual(p.api.call.call_count, 3)  # the public key is fetched once
+
+    def test_github_seal_decrypts_with_the_repository_key(self):
+        try:
+            from nacl import encoding, public
+        except ImportError:
+            self.skipTest("PyNaCl is installed only in the sync job")
+        private = public.PrivateKey.generate()
+        sealed = SYNC.seal(private.public_key.encode(encoding.Base64Encoder()).decode(), "secret-value")
+        self.assertNotIn("secret-value", sealed)
+        opened = public.SealedBox(private).decrypt(sealed.encode(), encoding.Base64Encoder())
+        self.assertEqual(opened, b"secret-value")
+
+    def test_github_writes_without_deploying_and_resumes_an_interrupted_run(self):
+        p = self.github([])
+        writes = []
+
+        def call(method, path, body=None, query=None):
+            if method == "GET" and path.endswith("/public-key"):
+                return {"key": "k", "key_id": "id"}
+            if method == "PUT":
+                if path.endswith("/SECOND") and not writes.count("retry"):
+                    writes.append("retry")
+                    raise SYNC.SyncError("Simulated write failure")
+                writes.append(path.rsplit("/", 1)[1])
+                return None
+            return {"secrets": [{"name": k, "updated_at": str(len(writes))} for k in ("KEY", "SECOND")]}
+
+        p.api.call.side_effect = call
+        values, state = {"KEY": "secret-value", "SECOND": "other"}, {}
+        with patch.object(SYNC, "seal", return_value="sealed"):
+            with self.assertRaises(SYNC.SyncError):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    SYNC.sync_target(self.target, values, p, state, self.path, "signing-secret", True, True)
+            self.assertNotIn("revision", json.loads(self.path.read_text())["test"])
+            self.run_sync(p, state, values)
+        self.assertEqual(writes, ["KEY", "retry", "KEY", "SECOND"])
+        self.assertFalse(state["test"]["pending"])
+        self.assertNotIn("deployment", state["test"])
+        self.assertNotIn("secret-value", self.path.read_text())
+        before = list(writes)
+        self.run_sync(p, state, values)
+        self.assertEqual(writes, before)
+
+    def test_github_target_cannot_manage_the_sync_token(self):
+        target = {"provider": "github", "sources": [{"environment_id": "e", "keys": ["OP_SERVICE_ACCOUNT_TOKEN"]}]}
+        with self.assertRaisesRegex(SYNC.SyncError, "never manage"):
+            SYNC.desired_values({"e": [SimpleNamespace(name="OP_SERVICE_ACCOUNT_TOKEN", value="t")]}, target)
+
+    # --- Variables set outside the manifest ---
+
+    def test_unmanaged_names_are_reported_without_values(self):
+        p = Provider({"KEY": "secret-value"})
+        p.unmanaged = ["HAND_SET"]
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            SYNC.sync_target(self.target, {"KEY": "secret-value"}, p, {}, self.path, "signing-secret", False, False)
+        self.assertIn("::warning::test", output.getvalue())
+        self.assertIn("HAND_SET", output.getvalue())
+        self.assertNotIn("secret-value", output.getvalue())
+
+    def test_render_lists_variables_it_does_not_manage(self):
+        p = SYNC.Render({"service_id": "test", "manual": ["KEPT"]}, "token")
+        p.api = Mock()
+        p.api.call.return_value = [{"envVar": {"key": k, "value": "v"}} for k in ("KEY", "OLD", "KEPT")]
+        p.changes({"KEY": "v"}, {}, "revision", False)
+        self.assertEqual(p.unmanaged, ["OLD"])
+
+    def test_github_lists_secrets_it_does_not_manage(self):
+        p = self.github([{"name": n, "updated_at": "1"} for n in ("KEY", "ARCHWAY_PASSWORD", "STALE")])
+        p.changes({"KEY": "v"}, {}, "revision", True)
+        self.assertEqual(p.unmanaged, ["STALE"])
+
+
+class ManifestTests(unittest.TestCase):
+    """The checked-in manifest is what production and the laptop both read."""
+
+    def setUp(self):
+        self.config = json.loads((Path(__file__).resolve().parents[1] / "config/environment-sync.json").read_text())
+
+    def test_every_target_passes_the_sync_checks(self):
+        names = [t["name"] for t in self.config["targets"]]
+        self.assertEqual(len(names), len(set(names)))
+        for target in self.config["targets"]:
+            self.assertIn(target["provider"], SYNC.PROVIDER_TOKENS)
+            sources = {s["environment_id"]: [SimpleNamespace(name=stored, value="x") for stored in (
+                s["keys"].values() if isinstance(s["keys"], dict) else s["keys"])] for s in target["sources"]}
+            SYNC.desired_values(sources, target)
+            if target["provider"] == "github":
+                SYNC.GitHub(target, "token")
+
+    def test_a_shared_setting_has_one_value_everywhere(self):
+        seen = {}
+        for target in self.config["targets"]:
+            for key, value in target.get("settings", {}).items():
+                self.assertEqual(seen.setdefault(key, value), value, key)
+
+    def test_laptop_targets_exist(self):
+        # rockygpt-workspace local-env.py reads these two targets' settings.
+        names = {t["name"] for t in self.config["targets"]}
+        self.assertLessEqual({"brain-production", "ui-production"}, names)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -10,7 +10,7 @@ on:
         type: boolean
         default: false
       bootstrap:
-        description: First Vercel sync from reviewed 1Password values
+        description: First Vercel or GitHub sync from reviewed 1Password values
         type: boolean
         default: false
 
