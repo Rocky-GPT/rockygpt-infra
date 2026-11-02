@@ -86,7 +86,12 @@ def desired_values(sources, target):
 ALLOWED_SETTINGS = {
     "render": {"BRAIN_ENVIRONMENT", "BRAIN_OPENAI_PROJECT", "BRAIN_OUTPUT", "BRAIN_HOWTO_ONE_CALL",
                "BRAIN_WRITER_MAX_OUTPUT_TOKENS", "BRAIN_OPENAI_EMBED_MODEL",
-               "BRAIN_OPENAI_EMBED_INPUT_NUSD_PER_TOKEN", "BRAIN_OPENAI_EMBED_PRICE_VALID_UNTIL"},
+               "BRAIN_OPENAI_EMBED_INPUT_NUSD_PER_TOKEN", "BRAIN_OPENAI_EMBED_PRICE_VALID_UNTIL",
+               # The release graph production serves, the same file the laptop serves
+               # (rockygpt-brain retrieval/graph_sync.py). The laptop's local-env.py keeps these
+               # off its Brain: its copy changes only when synced by hand.
+               "BRAIN_GRAPH_ONLY_DIR", "BRAIN_GRAPH_STORE_BUCKET", "BRAIN_GRAPH_STORE_ENDPOINT",
+               "BRAIN_GRAPH_STORE_REGION"},
     "vercel": {"BRAIN_URL"},
     "github": {"BRAIN_URL", "UI_URL"},
 }
