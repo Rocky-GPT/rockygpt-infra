@@ -22,7 +22,6 @@
       "settings": {
         "BRAIN_ENVIRONMENT": "production",
         "BRAIN_OPENAI_PROJECT": "proj_aMhXgndK2e9EUQZpXbLFh4yV",
-        "BRAIN_ROUTING_MODE": "active",
         "BRAIN_OUTPUT": "written",
         "BRAIN_HOWTO_ONE_CALL": "1",
         "BRAIN_WRITER_MAX_OUTPUT_TOKENS": "6000",
@@ -50,6 +49,93 @@
       "settings": {
         "BRAIN_URL": "https://rockygpt-brain.onrender.com"
       }
+    },
+    {
+      "name": "data-actions",
+      "provider": "github",
+      "enabled": false,
+      "repository": "Rocky-GPT/rockygpt-data",
+      "sources": [
+        {
+          "environment_id": "q67qwjjknjx6nqrbzdus6sa3vi",
+          "keys": {
+            "DATABASE_URL": "PRODUCTION_DATABASE_URL",
+            "OPENAI_API_KEY": "BRAIN_OPENAI_API_KEY",
+            "TYPESAFE_API_KEY": "BRAIN_TYPESAFE_API_KEY",
+            "RAW_ARTIFACT_ACCESS_KEY_ID": "RAW_ARTIFACT_ACCESS_KEY_ID",
+            "RAW_ARTIFACT_SECRET_ACCESS_KEY": "RAW_ARTIFACT_SECRET_ACCESS_KEY"
+          }
+        }
+      ],
+      "manual": [
+        "ARCHWAY_USERNAME",
+        "ARCHWAY_PASSWORD"
+      ]
+    },
+    {
+      "name": "infra-actions-production",
+      "provider": "github",
+      "enabled": false,
+      "repository": "Rocky-GPT/rockygpt-infra",
+      "environment": "production",
+      "sources": [
+        {
+          "environment_id": "q67qwjjknjx6nqrbzdus6sa3vi",
+          "keys": {
+            "STAGING_SERVICE_TOKEN": "PRODUCTION_SERVICE_TOKEN"
+          }
+        }
+      ],
+      "settings": {
+        "BRAIN_URL": "https://rockygpt-brain.onrender.com",
+        "UI_URL": "https://rockygpt.danielrajakumar.com"
+      },
+      "manual": [
+        "OP_SERVICE_ACCOUNT_TOKEN"
+      ]
+    },
+    {
+      "name": "infra-actions",
+      "provider": "github",
+      "enabled": false,
+      "repository": "Rocky-GPT/rockygpt-infra",
+      "sources": [
+        {
+          "environment_id": "q67qwjjknjx6nqrbzdus6sa3vi",
+          "keys": {
+            "STAGING_SERVICE_TOKEN": "PRODUCTION_SERVICE_TOKEN"
+          }
+        }
+      ],
+      "settings": {
+        "BRAIN_URL": "https://rockygpt-brain.onrender.com",
+        "UI_URL": "https://rockygpt.danielrajakumar.com"
+      },
+      "manual": [
+        "VERCEL_AUTOMATION_BYPASS_SECRET"
+      ]
+    },
+    {
+      "name": "evals-actions-production",
+      "provider": "github",
+      "enabled": false,
+      "repository": "Rocky-GPT/rockygpt-evals",
+      "environment": "production",
+      "sources": [
+        {
+          "environment_id": "q67qwjjknjx6nqrbzdus6sa3vi",
+          "keys": {
+            "STAGING_SERVICE_TOKEN": "PRODUCTION_SERVICE_TOKEN",
+            "TYPESAFE_API_KEY": "BRAIN_TYPESAFE_API_KEY"
+          }
+        }
+      ],
+      "settings": {
+        "BRAIN_URL": "https://rockygpt-brain.onrender.com"
+      },
+      "manual": [
+        "DATA_URL"
+      ]
     }
   ]
 }
