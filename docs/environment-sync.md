@@ -1,8 +1,8 @@
 # 1Password production environment sync
 
 The `Environment Sync` workflow selects secrets from the RockyGPT 1Password Environment
-with public settings in `config/environment-sync.json`, then updates Render and
-Vercel. It runs every 30 minutes when the repository
+with public settings in `config/environment-sync.json`, then updates Render,
+Vercel and GitHub Actions secrets. It runs every 30 minutes when the repository
 variable `ENV_SYNC_ENABLED` is `true`. GitHub schedules can be delayed.
 
 Scheduled writes require **verified credentials, enabled target flags, and a
@@ -18,6 +18,43 @@ Preview, staging, local files, and unrelated hosting variables are outside
 this production sync. Removing a source variable does not delete it remotely;
 missing or empty managed values stop the run instead.
 
+## One manifest for production and the laptop
+
+The laptop launcher (`rockygpt-workspace/local-env.py`) reads the `settings` of
+`brain-production` and `ui-production` from this same file, overriding only
+`BRAIN_ENVIRONMENT=development`. So a public setting is added in one place and
+reaches Render on the next sync and the laptop on its next start. Put a new setting
+on `dev` first to try it locally; it reaches production when `dev` is released to
+`main`. Add its name to `ALLOWED_SETTINGS` in `scripts/sync-environments.py`.
+
+Every run also lists, by name only, the variables a target holds that the manifest
+does not manage (set by hand in a dashboard, or left over from an old setting). They
+appear as a warning on the workflow run, because the laptop never sees them. Either
+manage the variable here or, if it is deliberately kept by hand, add its name to the
+target's `manual` list. The sync never deletes anything.
+
+## GitHub Actions secrets
+
+`provider: "github"` targets keep a repository's Actions secrets (or one deployment
+environment's, with `environment`) equal to 1Password. This is what would have caught
+the data repository's `OPENAI_API_KEY` sitting dead from August: a key replaced in
+1Password now reaches every workflow that uses it. Workflows read the new value on
+their next run; nothing redeploys. GitHub secrets are write-only, so as with Vercel
+the checkpoint pairs a keyed fingerprint of the source with each secret's update time,
+and an edit made directly on GitHub is overwritten by the next run. The sync never
+manages its own `OP_SERVICE_ACCOUNT_TOKEN`.
+
+The GitHub targets ship disabled. To turn them on:
+
+1. Create a fine-grained GitHub token with resource owner **Rocky-GPT**, access to
+   `rockygpt-data`, `rockygpt-infra` and `rockygpt-evals`, and repository permissions
+   **Secrets: Read and write** and **Environments: Read and write**.
+2. Save it in the RockyGPT 1Password Environment as `GITHUB_SECRETS_TOKEN`.
+3. Check each target's mapping (for example, data's `OPENAI_API_KEY` comes from
+   `BRAIN_OPENAI_API_KEY`), set `enabled: true`, and release to `main`.
+4. Dispatch with **apply=false**, **bootstrap=true**, read the counts and any
+   unmanaged-name warnings, then dispatch with **apply=true**, **bootstrap=true** once.
+
 ## Access
 
 The official `onepassword-sdk` reads the existing Environments directly. MCP
@@ -31,7 +68,7 @@ Environment, including local and storage secrets; the sync's explicit allowlists
 select only the hosting tokens and each production service's assigned values.
 It has no vault access and cannot create vaults.
 
-`RENDER_API_KEY` and `VERCEL_TOKEN` live in the same Environment. Vercel's token
+`RENDER_API_KEY`, `VERCEL_TOKEN` and `GITHUB_SECRETS_TOKEN` live in the same Environment. Vercel's token
 should be scoped to the `rockygpt` project. Save a backup of the service-account
 token in the owner's private 1Password vault, outside the Environment it reads.
 
