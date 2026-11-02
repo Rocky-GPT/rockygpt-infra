@@ -30,7 +30,7 @@ async function request(label, url, init, expected = 200) {
 await request('UI readiness', `${base('UI_URL')}/api/readiness`);
 await request('brain readiness', `${base('BRAIN_URL')}/readiness`);
 
-// The Brain answers /v1/* only with the shared service token (STAGING_SERVICE_TOKEN, sent as
+// The Brain answers /v1/* only with the shared service token (SERVICE_TOKEN, sent as
 // x-rockygpt-environment-token). A request without it must be refused with 401 "unauthorized":
 // 503 "service_not_configured" means production has no token, and anything else means the gate is
 // open. Neither check makes a model call.
@@ -45,7 +45,7 @@ if (refused?.error?.code !== 'unauthorized') {
 }
 
 // With the token, a malformed body must reach the Brain's own validation.
-const serviceToken = process.env.STAGING_SERVICE_TOKEN?.trim();
+const serviceToken = (process.env.SERVICE_TOKEN || process.env.STAGING_SERVICE_TOKEN)?.trim();
 if (serviceToken) {
   await request(
     'invalid brain chat request',
@@ -58,7 +58,7 @@ if (serviceToken) {
     422
   );
 } else {
-  console.log('invalid brain chat request: skipped (no STAGING_SERVICE_TOKEN)');
+  console.log('invalid brain chat request: skipped (no SERVICE_TOKEN)');
 }
 
 console.log('cross-service smoke: passed');
