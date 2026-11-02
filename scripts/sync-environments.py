@@ -3,7 +3,8 @@
 
 Targets are Render, Vercel and GitHub Actions secrets. Each run also names (never shows) the
 variables a target holds that the manifest does not manage, so a value set by hand in a dashboard
-cannot silently make production differ from the laptop, which reads the same manifest.
+cannot silently make production differ from the laptop, which reads the same manifest. A name
+listed under a target's "retired" is deleted from that target; nothing else is ever deleted.
 
 Values are held in memory only. State contains keyed fingerprints and deployment
 IDs, never environment values. HTTP/SDK errors are intentionally not echoed.
@@ -93,10 +94,25 @@ PROVIDER_TOKENS = {"render": "RENDER_API_KEY", "vercel": "VERCEL_TOKEN", "github
 
 
 def unmanaged_names(target, present, desired):
-    """Names a target holds that the manifest neither manages nor lists as kept by hand."""
+    """Names a target holds that the manifest neither manages, lists as kept by hand, nor retires."""
     manual = target.get("manual", [])
     require(isinstance(manual, list) and all(isinstance(k, str) for k in manual), "Invalid manual list")
-    return sorted(set(present) - set(desired) - set(manual))
+    return sorted(set(present) - set(desired) - set(manual) - set(retired_names(target, desired)))
+
+
+def retired_names(target, desired):
+    """Names nothing reads any more. The sync deletes them from the target; it deletes nothing else."""
+    retired = target.get("retired", [])
+    require(isinstance(retired, list) and all(
+        isinstance(k, str) and re.fullmatch(r"[A-Z][A-Z0-9_]*", k) for k in retired), "Invalid retired list")
+    require(not set(retired).intersection(desired) and not set(retired).intersection(target.get("manual", [])),
+            "A retired variable is still managed or kept by hand")
+    return retired
+
+
+def stale_names(target, present, desired):
+    """Retired names the target still holds: these are deleted on the next applied run."""
+    return sorted(set(present).intersection(retired_names(target, desired)))
 
 
 class API:
@@ -127,7 +143,7 @@ class Render:
     redeploys = True
 
     def __init__(self, target, token):
-        self.target, self.unmanaged = target, []
+        self.target, self.unmanaged, self.stale = target, [], []
         self.api = API("https://api.render.com/v1", token)
         self.path = "/services/" + quote(target["service_id"], safe="")
 
@@ -151,6 +167,7 @@ class Render:
         rows = self.rows("/env-vars")
         current = {row["envVar"]["key"]: row["envVar"]["value"] for row in rows}
         self.unmanaged = unmanaged_names(self.target, current, desired)
+        self.stale = stale_names(self.target, current, desired)
         return [key for key, value in desired.items() if current.get(key) != value]
 
     def base_revision(self):
@@ -165,6 +182,9 @@ class Render:
 
     def put(self, key, value):
         self.api.call("PUT", self.path + "/env-vars/" + quote(key, safe=""), {"value": value})
+
+    def remove(self, key):
+        self.api.call("DELETE", self.path + "/env-vars/" + quote(key, safe=""))
 
     def deploy(self, base):
         result = self.api.call("POST", self.path + "/deploys", {"commitId": base})
@@ -183,7 +203,7 @@ class Vercel:
     redeploys = True
 
     def __init__(self, target, token):
-        self.target, self.envs, self.unmanaged = target, {}, []
+        self.target, self.envs, self.unmanaged, self.stale = target, {}, [], []
         self.api = API("https://api.vercel.com", token, {"slug": target["team_slug"]})
         self.project = quote(target["project"], safe="")
 
@@ -195,6 +215,7 @@ class Vercel:
         require(len({r["key"] for r in selected}) == len(selected), "Duplicate Vercel production variable")
         self.envs = {row["key"]: row for row in selected}
         self.unmanaged = unmanaged_names(self.target, self.envs, desired)
+        self.stale = stale_names(self.target, self.envs, desired)
         for key in desired:
             if key in self.envs:
                 require(self.envs[key]["target"] == ["production"],
@@ -238,6 +259,9 @@ class Vercel:
         else:
             self.api.call("POST", f"/v10/projects/{self.project}/env", body)
 
+    def remove(self, key):
+        self.api.call("DELETE", f"/v9/projects/{self.project}/env/" + quote(self.envs[key]["id"], safe=""))
+
     def deploy(self, base):
         # deploymentId can reuse the original environment. A pinned Git source
         # rebuilds the live code using the newly configured project variables.
@@ -271,7 +295,7 @@ class GitHub:
     redeploys = False
 
     def __init__(self, target, token):
-        self.target, self.secrets, self.unmanaged, self.key = target, {}, [], None
+        self.target, self.secrets, self.unmanaged, self.stale, self.key = target, {}, [], [], None
         self.api = API("https://api.github.com", token, headers={
             "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"})
         repository = target.get("repository", "")
@@ -295,6 +319,7 @@ class GitHub:
     def changes(self, desired, previous, revision, bootstrap):
         self.secrets = {row["name"]: row for row in self.rows()}
         self.unmanaged = unmanaged_names(self.target, self.secrets, desired)
+        self.stale = stale_names(self.target, self.secrets, desired)
         require(bool(previous) or bootstrap,
                 "GitHub has no trusted sync state; a reviewed bootstrap run is required")
         if previous.get("revision") == revision and previous.get("metadata") == self.metadata(desired):
@@ -311,6 +336,9 @@ class GitHub:
                     "Unexpected GitHub public key response")
         self.api.call("PUT", self.path + "/" + quote(key, safe=""),
                       {"encrypted_value": seal(self.key["key"], value), "key_id": self.key["key_id"]})
+
+    def remove(self, key):
+        self.api.call("DELETE", self.path + "/" + quote(key, safe=""))
 
 
 def save_state(path, state):
@@ -349,8 +377,11 @@ def sync_target(target, desired, provider, state, state_path, secret, apply=Fals
                 previous["pending"] = False
                 save_state(state_path, state)
     changes = provider.changes(desired, previous, revision, bootstrap)
+    stale = list(getattr(provider, "stale", []))
     pending = previous.get("pending", False)
     print(f"{name}: {len(changes)} managed variables need syncing; deployment pending: {pending}")
+    if stale:
+        print(f"{name}: retired variables to delete: {', '.join(stale)}")
     unmanaged = getattr(provider, "unmanaged", [])
     if unmanaged:
         # Names only. A GitHub annotation puts this on the run page, not just in the log.
@@ -359,7 +390,7 @@ def sync_target(target, desired, provider, state, state_path, secret, apply=Fals
     if not apply:
         return
     if not getattr(provider, "redeploys", True):
-        if not changes and not pending:
+        if not changes and not stale and not pending:
             state[name] = previous | {"revision": revision, "pending": False}
             save_state(state_path, state)
             return
@@ -368,12 +399,15 @@ def sync_target(target, desired, provider, state, state_path, secret, apply=Fals
         save_state(state_path, state)
         for key in changes:
             provider.put(key, desired[key])
+        for key in stale:
+            provider.remove(key)
         provider.changes(desired, state[name], revision, True)
         state[name] = {"revision": revision, "pending": False, "metadata": provider.metadata(desired)}
         save_state(state_path, state)
-        print(f"{name}: {len(changes)} secrets updated; workflows use them on their next run")
+        print(f"{name}: {len(changes)} secrets updated, {len(stale)} retired deleted; "
+              "workflows use them on their next run")
         return
-    if not changes and not pending:
+    if not changes and not stale and not pending:
         state[name] = previous | {"revision": revision, "pending": False}
         save_state(state_path, state)
         return
@@ -382,6 +416,8 @@ def sync_target(target, desired, provider, state, state_path, secret, apply=Fals
     save_state(state_path, state)  # Preserve the pending flag through partial writes.
     for key in changes:
         provider.put(key, desired[key])
+    for key in stale:
+        provider.remove(key)
     if isinstance(provider, Vercel):
         # Read back metadata only; never request decryption of sensitive values.
         provider.changes(desired, state[name], revision, True)

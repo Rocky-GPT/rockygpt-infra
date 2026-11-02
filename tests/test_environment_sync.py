@@ -53,15 +53,23 @@ class CheckpointTests(unittest.TestCase):
 
 
 class Provider:
-    def __init__(self, current):
+    def __init__(self, current, retired=()):
         self.current = dict(current)
+        self.retired = list(retired)
+        self.stale = []
         self.writes = []
+        self.removed = []
         self.deploys = []
         self.fail_key = None
         self.deploy_status = "ready"
 
     def changes(self, values, *_):
+        self.stale = sorted(set(self.current).intersection(self.retired))
         return [k for k, v in values.items() if self.current.get(k) != v]
+
+    def remove(self, key):
+        del self.current[key]
+        self.removed.append(key)
 
     def base_revision(self):
         return "a" * 40
@@ -399,6 +407,42 @@ class SyncTests(unittest.TestCase):
         p.api.call.return_value = [{"envVar": {"key": k, "value": "v"}} for k in ("KEY", "OLD", "KEPT")]
         p.changes({"KEY": "v"}, {}, "revision", False)
         self.assertEqual(p.unmanaged, ["OLD"])
+
+    # --- Retired variables ---
+
+    def test_retired_variable_is_deleted_and_the_service_redeployed(self):
+        p = Provider({"KEY": "secret-value", "OLD": "x", "OTHER": "keep"}, retired=["OLD"])
+        self.run_sync(p, {}, apply=False)
+        self.assertEqual((p.removed, p.deploys), ([], []))
+        self.run_sync(p, {})
+        self.assertEqual(p.removed, ["OLD"])
+        self.assertEqual(p.writes, [])
+        self.assertEqual(len(p.deploys), 1)
+        self.assertEqual(p.current, {"KEY": "secret-value", "OTHER": "keep"})
+        self.run_sync(p, {})
+        self.assertEqual(len(p.deploys), 1)
+
+    def test_retired_secret_is_deleted_without_deploying(self):
+        p = Provider({"KEY": "secret-value", "OLD": "x"}, retired=["OLD"])
+        p.redeploys = False
+        p.metadata = lambda desired: {}
+        self.run_sync(p, {})
+        self.assertEqual((p.removed, p.deploys), (["OLD"], []))
+
+    def test_a_retired_name_cannot_also_be_managed_or_manual(self):
+        for target in ({"retired": ["KEY"]}, {"retired": ["HAND"], "manual": ["HAND"]},
+                       {"retired": ["bad-name"]}):
+            with self.assertRaises(SYNC.SyncError):
+                SYNC.stale_names(target, {"KEY": "v"}, {"KEY": "v"})
+
+    def test_render_deletes_only_retired_names_and_does_not_warn_about_them(self):
+        p = SYNC.Render({"service_id": "test", "retired": ["GONE", "OLD"]}, "token")
+        p.api = Mock()
+        p.api.call.return_value = [{"envVar": {"key": k, "value": "v"}} for k in ("KEY", "OLD", "HAND")]
+        p.changes({"KEY": "v"}, {}, "revision", False)
+        self.assertEqual((p.stale, p.unmanaged), (["OLD"], ["HAND"]))
+        p.remove("OLD")
+        self.assertEqual(p.api.call.call_args.args, ("DELETE", "/services/test/env-vars/OLD"))
 
     def test_github_lists_secrets_it_does_not_manage(self):
         p = self.github([{"name": n, "updated_at": "1"} for n in ("KEY", "ARCHWAY_PASSWORD", "STALE")])
