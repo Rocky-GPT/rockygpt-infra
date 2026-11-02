@@ -53,7 +53,7 @@
     {
       "name": "data-actions",
       "provider": "github",
-      "enabled": false,
+      "enabled": true,
       "repository": "Rocky-GPT/rockygpt-data",
       "sources": [
         {
@@ -75,7 +75,7 @@
     {
       "name": "infra-actions-production",
       "provider": "github",
-      "enabled": false,
+      "enabled": true,
       "repository": "Rocky-GPT/rockygpt-infra",
       "environment": "production",
       "sources": [
@@ -97,7 +97,7 @@
     {
       "name": "infra-actions",
       "provider": "github",
-      "enabled": false,
+      "enabled": true,
       "repository": "Rocky-GPT/rockygpt-infra",
       "sources": [
         {
@@ -118,7 +118,7 @@
     {
       "name": "evals-actions-production",
       "provider": "github",
-      "enabled": false,
+      "enabled": true,
       "repository": "Rocky-GPT/rockygpt-evals",
       "environment": "production",
       "sources": [
