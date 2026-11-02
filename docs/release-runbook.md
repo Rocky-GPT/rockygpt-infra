@@ -3,33 +3,35 @@
 ## Environment topology
 
 Development happens on `dev` across repositories. Merges into `main` automatically deploy production services:
-- **UI**: Vercel production deployment (`rockygpt.vercel.app`)
-- **Brain**: Render Python service (`rockygpt-brain.onrender.com`) — serves campus data as well as answers
-- **Data**: retired 2026-08-28. `rockygpt-data` no longer exists on Render; the repository is kept for its ingestion tooling only.
+- **UI**: Vercel production deployment (`rockygpt.danielrajakumar.com`). Each release adds a line at the top of `rockygpt-ui/lib/versions.ts` (About page "Versions").
+- **Brain**: Render Python service (`rockygpt-brain.onrender.com`), Starter plan ($7/month, always on since 2026-11-01). Render deploys a `main` commit only after its "Release checks" check run passes.
+- **Data**: no service. `rockygpt-data` publishes datasets from its scheduled workflows on `main`; publishing is a pipeline run, not a release.
+- **Dev UI** (`rockygpt-dev`) and the laptop launcher (`rockygpt-workspace`) run only on Dan's laptop.
 
-Free Render services sleep after 15 minutes idle, and a first request then takes roughly a minute; automation still allows 90 seconds for anything that may hit a cold instance.
+The Brain no longer sleeps, so cold starts happen only right after a deploy. At startup it loads its meaning index and per-release lists before taking questions (at most 120 s; `BRAIN_WARM_AT_START=0` turns this off).
 
-The brain is deliberately kept awake, by **two** things — check both before reasoning about cold starts or instance hours:
+An UptimeRobot monitor, `RockyGPT brain (down alert)`, sends `HEAD /health` every 5 minutes and emails Dan when the Brain is down. It lives in Dan's UptimeRobot account, not in any repository. Free-plan monitors send `HEAD`, so any endpoint a monitor points at must answer `HEAD` as well as `GET`: `/health` does, and `/readiness` does not.
 
-- `rockygpt-brain/.github/workflows/chat-log-persistence.yml`, every 15 minutes. Its purpose is alerting on the chat-log store, but the cadence sits exactly on Render's idle threshold, so warming is a documented side effect. GitHub cron is best-effort and drifts late, so it warms unreliably.
-- An UptimeRobot monitor (`RockyGPT brain (keep-warm)`), `GET /health` every 5 minutes. Added 2026-08-28 for a dependable cadence and external alerting.
+## Settings and secrets
 
-Together these reverse the previous rule against synthetic keep-warm traffic. They are affordable only within a budget worth stating explicitly:
+Production settings come from one place: `config/environment-sync.json` here, plus the RockyGPT 1Password Environment for secret values. The `Environment Sync` workflow on `main` writes Render, Vercel and GitHub Actions secrets, then redeploys Render and Vercel if anything changed. It runs on a 30-minute schedule (GitHub often runs it hours late) and by hand with **Run workflow** (`apply` ticked to write; unticked is a dry run).
 
-- Render grants **750 free instance hours per calendar month per workspace**, not per service. Exhausting the pool suspends *every* free service until the 1st.
-- Hours accrue only while a service is awake. Ping frequency is irrelevant to cost — a 5-minute and a 14-minute interval bill identically; only hours-awake matter.
-- The brain awake continuously costs 744 h in a 31-day month, against a 750 h pool. The margin is under 1%, so a second continuously-awake free service does not fit.
+- To **add** a setting, add it to the manifest and, if it is secret, to 1Password under the stored name the manifest maps.
+- To **remove** one, delete it from the manifest and list its name under that target's `retired`; the next sync deletes it from the provider.
+- To **rename** one, first teach the readers both names, release that, then switch the manifest destination and retire the old name, then drop the fallback. That is how `STAGING_SERVICE_TOKEN` became `SERVICE_TOKEN` on 2026-11-02.
+- Rename a 1Password item only after the manifest that reads the new name is on `main`; until then the sync stops on the missing name (it changes nothing, but it pauses).
 
-This is why `rockygpt-data` was retired rather than left idle: a second free service that anything wakes on a schedule does not fit alongside a continuously-awake brain. Keep the workspace to one continuously-awake free service.
+## Dates that expire
 
-Because the monitor treats any non-2xx as an outage, and free-plan monitors send `HEAD` with no way to change the method, any endpoint a monitor points at must answer `HEAD` as well as `GET`. `/health` does; `/readiness` and `/readiness/chat-logs` do not, and would report a false outage if pointed at today.
+- The bundled gpt-6-luna price (`rockygpt-brain/src/rockygpt_brain/provider-release.json`) expires monthly, and the Brain stops answering when it does (production was down 17 hours on 2026-11-01). `rockygpt-brain/.github/workflows/price-renewal.yml` checks OpenAI's page daily; when the price is unchanged and 10 days or fewer remain it opens renewal PRs into `main` and `dev`. **Merge the `main` one.** A changed price, an unreadable page, or 5 days or fewer left opens a `price-check` issue.
+- Everything else (the embedding price setting, tokens) is in `config/expiries.json` or is a `*_VALID_UNTIL` setting, and the `Expiry Watch` workflow opens an `expiry-watch` issue 21 days ahead.
 
 ## Promotion and Deployment
 
 1. Develop and verify changes on each repository's `dev` branch.
 2. Run local and CI test suites (`pytest`, `typecheck`, `lint`, and Playwright suites).
-3. Merge `dev` into `main` in dependency order: **brain, then UI**. `rockygpt-data` no longer deploys; publishing a dataset is a pipeline run, not a release.
-4. After production deployment, verify service health using the `Service Smoke` workflow or local runner. The scheduled production monitor repeats the check every six hours.
+3. Merge `dev` into `main` in dependency order: **brain, then UI**. Keep `dev` and `main` identical in every repository after a release.
+4. After production deployment, verify service health using the `Service Smoke` workflow or local runner. The scheduled production monitor repeats the check every six hours. Both need the `SERVICE_TOKEN` secret for the full check.
 
 ### Retiring `rockygpt-data` (completed 2026-08-28)
 
@@ -37,7 +39,7 @@ Kept as a worked example, because the near-miss is the instructive part: a merge
 
 ```
 curl -s -o /dev/null -w '%{http_code}\n' https://rockygpt-brain.onrender.com/v1/map
-curl -s -o /dev/null -w '%{http_code}\n' https://rockygpt.vercel.app/api/map
+curl -s -o /dev/null -w '%{http_code}\n' https://rockygpt.danielrajakumar.com/api/map
 ```
 
 A 404 from the brain with a 200 from the UI means the UI is still being served by `rockygpt-data`, and removing that service would take every campus-data panel down with it. The order followed was: push brain `main`, confirm `/v1/map` answers 200, push UI `main`, confirm `/api/map` still answers 200, then delete the service.

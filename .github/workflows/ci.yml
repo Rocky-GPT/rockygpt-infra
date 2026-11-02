@@ -16,6 +16,9 @@ jobs:
       - name: Environment sync safety and recovery
         run: python3 -m unittest discover -s tests -p test_environment_sync.py
 
+      - name: Expiry watch
+        run: python3 -m unittest discover -s tests -p test_check_expiries.py
+
       # The split scripts rebuild whole directories; a syntax error in one is
       # discovered at the worst possible moment otherwise.
       - name: Shell syntax
