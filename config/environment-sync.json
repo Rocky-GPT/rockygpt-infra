@@ -64,7 +64,7 @@
           "keys": {
             "DATABASE_URL": "PRODUCTION_DATABASE_URL",
             "OPENAI_API_KEY": "BRAIN_OPENAI_API_KEY",
-            "TYPESAFE_API_KEY": "BRAIN_TYPESAFE_API_KEY",
+            "TYPESAFE_API_KEY": "TYPESAFE_API_KEY",
             "RAW_ARTIFACT_ACCESS_KEY_ID": "RAW_ARTIFACT_ACCESS_KEY_ID",
             "RAW_ARTIFACT_SECRET_ACCESS_KEY": "RAW_ARTIFACT_SECRET_ACCESS_KEY"
           }
@@ -129,7 +129,7 @@
           "environment_id": "q67qwjjknjx6nqrbzdus6sa3vi",
           "keys": {
             "STAGING_SERVICE_TOKEN": "PRODUCTION_SERVICE_TOKEN",
-            "TYPESAFE_API_KEY": "BRAIN_TYPESAFE_API_KEY"
+            "TYPESAFE_API_KEY": "TYPESAFE_API_KEY"
           }
         }
       ],
