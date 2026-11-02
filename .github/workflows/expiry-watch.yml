@@ -1,0 +1,61 @@
+name: Expiry Watch
+
+# Production stops or degrades when certain dates pass (price settings, tokens). Every day this
+# lists them (config/expiries.json plus every *_VALID_UNTIL setting in environment-sync.json).
+# 21 days out it opens or updates an `expiry-watch` issue; 7 days out it also fails the run, so
+# GitHub emails. Scheduled runs can start hours late, which the 21-day window absorbs.
+on:
+  schedule:
+    - cron: '29 14 * * *'  # ~10:29 New York
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/expiry-watch.yml
+      - scripts/check-expiries.py
+      - config/expiries.json
+
+permissions:
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: List upcoming expiries
+        id: dates
+        run: python3 scripts/check-expiries.py
+      - name: Open or update the expiry issue
+        if: github.event_name != 'pull_request' && (steps.dates.outputs.warn != '' || steps.dates.outputs.urgent != '')
+        env:
+          WARN: ${{ steps.dates.outputs.warn }}
+          URGENT: ${{ steps.dates.outputs.urgent }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          {
+            echo "These production dates are close. Renew each one, then close this issue."
+            echo
+            if [ -n "$URGENT" ]; then echo "**7 days or less (or already past):**"; echo "$URGENT"; echo; fi
+            if [ -n "$WARN" ]; then echo "**Within 21 days:**"; echo "$WARN"; echo; fi
+            echo "Run: $RUN_URL"
+          } > body.md
+          body=$(cat body.md)
+          existing=$(gh issue list --state open --label expiry-watch --json number --jq '.[0].number' 2>/dev/null || true)
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh label create expiry-watch --color B60205 --description "Daily expiry watch" 2>/dev/null || true
+            gh issue create --title "Production dates expiring soon" --body "$body" \
+              --label expiry-watch --assignee daniel-rajakumar
+          fi
+      - name: Fail when a date is 7 days away or past
+        if: github.event_name != 'pull_request' && steps.dates.outputs.urgent != ''
+        run: |
+          echo "::error::A production date expires within 7 days; see the expiry-watch issue."
+          exit 1
