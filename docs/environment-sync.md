@@ -114,8 +114,9 @@ only on passing unit tests or creating credentials.
 The RockyGPT Environment stores shared API keys once. Local and production
 databases use `LOCAL_DATABASE_URL`, `LOCAL_LEDGER_DATABASE_URL`,
 `PRODUCTION_DATABASE_URL`, and `PRODUCTION_LEDGER_DATABASE_URL`.
-`PRODUCTION_SERVICE_TOKEN` maps to the application's existing
-`STAGING_SERVICE_TOKEN` name. UI hashing, artifact storage and hosting API keys
+`PRODUCTION_SERVICE_TOKEN` maps to the application's `SERVICE_TOKEN`
+(formerly `STAGING_SERVICE_TOKEN`, now retired, so the sync deletes it). UI
+hashing, artifact storage and hosting API keys
 retain their service-specific names.
 
 The sync reads the Environment once and maps only each consumer's assigned

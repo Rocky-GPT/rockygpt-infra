@@ -198,7 +198,7 @@ def main() -> None:
     # BRAIN_REVISION tells the Dev control room which commit answered each turn.
     runtime_env = {**os.environ, **values, "PYTHONPATH": str(build / "src"), "PYTHONDONTWRITEBYTECODE": "1",
                    "PYTHON_DOTENV_DISABLED": "1", "BRAIN_REVISION": revision}
-    for key in ("BRAIN_EXPECTED_CONFIG_HASH", "STAGING_SERVICE_TOKEN", "OPENAI_CHAT_MODEL"):
+    for key in ("BRAIN_EXPECTED_CONFIG_HASH", "SERVICE_TOKEN", "STAGING_SERVICE_TOKEN", "OPENAI_CHAT_MODEL"):
         runtime_env.pop(key, None)
     fingerprint = json.loads(subprocess.check_output([
         str(brain / ".venv/bin/python"), "-c",

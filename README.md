@@ -54,7 +54,7 @@ access to the published `rockygpt_v2` schema. Data retains publication ownership
 The UI uses `ABUSE_HASH_KEY` for pseudonymous, per-process rate limiting; the
 restarted Brain does not verify client-identity signatures. Use a random key of
 at least 32 characters in production and never expose it to the browser. Optional
-environment access uses `STAGING_SERVICE_TOKEN`, shared by Brain and its clients.
+environment access uses `SERVICE_TOKEN`, shared by Brain and its clients.
 
 The role bootstrap runs only for a new PostgreSQL volume. An existing local
 volume predates these roles. Back it up if it contains anything you need, then
@@ -84,7 +84,7 @@ a deliberate retirement into a monitor incident every six hours.
 
 The `Service Smoke` workflow runs the same check with repository secrets. It
 checks UI and Brain readiness, that the Brain refuses chat without the shared
-service token (401 `unauthorized`), and, when `STAGING_SERVICE_TOKEN` is set,
+service token (401 `unauthorized`), and, when `SERVICE_TOKEN` is set,
 that a malformed chat body is rejected (422). None of it makes a model call.
 The restarted Brain exposes chat and probes; this smoke does not require the
 retired map or chat-log endpoints. Run the conversations in

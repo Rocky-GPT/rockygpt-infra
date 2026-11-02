@@ -14,7 +14,7 @@
             "BRAIN_OPENAI_API_KEY": "BRAIN_OPENAI_API_KEY",
             "DATABASE_URL": "PRODUCTION_DATABASE_URL",
             "BRAIN_LEDGER_DATABASE_URL": "PRODUCTION_LEDGER_DATABASE_URL",
-            "STAGING_SERVICE_TOKEN": "PRODUCTION_SERVICE_TOKEN"
+            "SERVICE_TOKEN": "PRODUCTION_SERVICE_TOKEN"
           }
         }
       ],
@@ -30,7 +30,8 @@
       },
       "retired": [
         "BRAIN_ROUTING_MODE",
-        "BRAIN_TYPESAFE_API_KEY"
+        "BRAIN_TYPESAFE_API_KEY",
+        "STAGING_SERVICE_TOKEN"
       ]
     },
     {
@@ -45,13 +46,16 @@
           "environment_id": "q67qwjjknjx6nqrbzdus6sa3vi",
           "keys": {
             "ABUSE_HASH_KEY": "ABUSE_HASH_KEY",
-            "STAGING_SERVICE_TOKEN": "PRODUCTION_SERVICE_TOKEN"
+            "SERVICE_TOKEN": "PRODUCTION_SERVICE_TOKEN"
           }
         }
       ],
       "settings": {
         "BRAIN_URL": "https://rockygpt-brain.onrender.com"
-      }
+      },
+      "retired": [
+        "STAGING_SERVICE_TOKEN"
+      ]
     },
     {
       "name": "data-actions",
@@ -85,7 +89,7 @@
         {
           "environment_id": "q67qwjjknjx6nqrbzdus6sa3vi",
           "keys": {
-            "STAGING_SERVICE_TOKEN": "PRODUCTION_SERVICE_TOKEN"
+            "SERVICE_TOKEN": "PRODUCTION_SERVICE_TOKEN"
           }
         }
       ],
@@ -95,6 +99,9 @@
       },
       "manual": [
         "OP_SERVICE_ACCOUNT_TOKEN"
+      ],
+      "retired": [
+        "STAGING_SERVICE_TOKEN"
       ]
     },
     {
@@ -106,7 +113,7 @@
         {
           "environment_id": "q67qwjjknjx6nqrbzdus6sa3vi",
           "keys": {
-            "STAGING_SERVICE_TOKEN": "PRODUCTION_SERVICE_TOKEN"
+            "SERVICE_TOKEN": "PRODUCTION_SERVICE_TOKEN"
           }
         }
       ],
@@ -116,6 +123,9 @@
       },
       "manual": [
         "VERCEL_AUTOMATION_BYPASS_SECRET"
+      ],
+      "retired": [
+        "STAGING_SERVICE_TOKEN"
       ]
     },
     {
@@ -128,7 +138,7 @@
         {
           "environment_id": "q67qwjjknjx6nqrbzdus6sa3vi",
           "keys": {
-            "STAGING_SERVICE_TOKEN": "PRODUCTION_SERVICE_TOKEN",
+            "SERVICE_TOKEN": "PRODUCTION_SERVICE_TOKEN",
             "TYPESAFE_API_KEY": "TYPESAFE_API_KEY"
           }
         }
@@ -138,6 +148,9 @@
       },
       "manual": [
         "DATA_URL"
+      ],
+      "retired": [
+        "STAGING_SERVICE_TOKEN"
       ]
     }
   ]

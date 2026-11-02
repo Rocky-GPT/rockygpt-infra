@@ -157,13 +157,13 @@ class SyncTests(unittest.TestCase):
     def test_consolidated_environment_maps_production_values_without_local_or_hosting_secrets(self):
         target = {"provider": "render", "sources": [{"environment_id": "project", "keys": {
             "DATABASE_URL": "PRODUCTION_DATABASE_URL", "BRAIN_LEDGER_DATABASE_URL": "PRODUCTION_LEDGER_DATABASE_URL",
-            "STAGING_SERVICE_TOKEN": "PRODUCTION_SERVICE_TOKEN"}}]}
+            "SERVICE_TOKEN": "PRODUCTION_SERVICE_TOKEN"}}]}
         sources = {"project": [SimpleNamespace(name=k, value=v) for k, v in {
             "LOCAL_DATABASE_URL": "local", "PRODUCTION_DATABASE_URL": "campus",
             "PRODUCTION_LEDGER_DATABASE_URL": "ledger", "PRODUCTION_SERVICE_TOKEN": "token",
             "RENDER_API_KEY": "hosting"}.items()]}
         self.assertEqual(SYNC.desired_values(sources, target),
-                         {"DATABASE_URL": "campus", "BRAIN_LEDGER_DATABASE_URL": "ledger", "STAGING_SERVICE_TOKEN": "token"})
+                         {"DATABASE_URL": "campus", "BRAIN_LEDGER_DATABASE_URL": "ledger", "SERVICE_TOKEN": "token"})
         sources["project"] = [v for v in sources["project"] if v.name != "PRODUCTION_DATABASE_URL"]
         with self.assertRaises(SYNC.SyncError):
             SYNC.desired_values(sources, target)
