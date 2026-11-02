@@ -63,7 +63,9 @@ def desired_values(sources, target):
         selected = selected_values(sources[source["environment_id"]], list(dict.fromkeys(keys.values())))
         values.update({destination: selected[key] for destination, key in keys.items()})
     allowed = {"render": {"BRAIN_ENVIRONMENT", "BRAIN_OPENAI_PROJECT", "BRAIN_ROUTING_MODE", "BRAIN_ROUTING_PROVIDER",
-                          "BRAIN_OUTPUT", "BRAIN_HOWTO_ONE_CALL", "BRAIN_WRITER_MAX_OUTPUT_TOKENS"},
+                          "BRAIN_OUTPUT", "BRAIN_HOWTO_ONE_CALL", "BRAIN_WRITER_MAX_OUTPUT_TOKENS",
+                          "BRAIN_OPENAI_EMBED_MODEL", "BRAIN_OPENAI_EMBED_INPUT_NUSD_PER_TOKEN",
+                          "BRAIN_OPENAI_EMBED_PRICE_VALID_UNTIL"},
                "vercel": {"BRAIN_URL"}}
     settings = target.get("settings", {})
     require(isinstance(settings, dict) and set(settings) <= allowed.get(target["provider"], set()),
