@@ -1,0 +1,10 @@
+{
+  "_comment": "Dates that stop or degrade production when they pass. The daily Expiry Watch opens an issue 21 days before each and fails its run (GitHub emails) 7 days before. Settings named *_VALID_UNTIL in environment-sync.json are watched automatically; list everything else here. The bundled gpt-6-luna price has its own renewal workflow in rockygpt-brain (price-renewal.yml).",
+  "items": [
+    {
+      "name": "GITHUB_SECRETS_TOKEN (fine-grained GitHub token used by the environment sync)",
+      "expires": "2027-11-01",
+      "renew": "Create a new fine-grained token (Rocky-GPT; data, infra, evals; Secrets + Environments read/write) and replace the value in the RockyGPT 1Password Environment. The date is the earliest it can expire; check the token page for the exact day."
+    }
+  ]
+}
