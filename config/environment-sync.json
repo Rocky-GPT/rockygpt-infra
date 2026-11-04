@@ -25,6 +25,7 @@
         "BRAIN_OPENAI_PROJECT": "proj_aMhXgndK2e9EUQZpXbLFh4yV",
         "BRAIN_OUTPUT": "written",
         "BRAIN_HOWTO_ONE_CALL": "1",
+        "BRAIN_PAGE_WRITER": "ai",
         "BRAIN_WRITER_MAX_OUTPUT_TOKENS": "6000",
         "BRAIN_OPENAI_EMBED_MODEL": "text-embedding-3-large",
         "BRAIN_OPENAI_EMBED_INPUT_NUSD_PER_TOKEN": "130",
