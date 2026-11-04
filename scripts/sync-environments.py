@@ -85,6 +85,9 @@ def desired_values(sources, target):
 # reads the same manifest, so a setting listed here reaches both production and the laptop.
 ALLOWED_SETTINGS = {
     "render": {"BRAIN_ENVIRONMENT", "BRAIN_OPENAI_PROJECT", "BRAIN_OUTPUT", "BRAIN_HOWTO_ONE_CALL",
+               # Who writes page answers: one_call (one AI call reads and writes), template or ai
+               # (two stages: a facts list first, then that writer; rockygpt-brain page_facts.py).
+               "BRAIN_PAGE_WRITER",
                "BRAIN_WRITER_MAX_OUTPUT_TOKENS", "BRAIN_OPENAI_EMBED_MODEL",
                "BRAIN_OPENAI_EMBED_INPUT_NUSD_PER_TOKEN", "BRAIN_OPENAI_EMBED_PRICE_VALID_UNTIL",
                # The release graph production serves, the same file the laptop serves
