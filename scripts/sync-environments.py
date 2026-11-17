@@ -88,6 +88,8 @@ ALLOWED_SETTINGS = {
                # Who writes page answers: one_call (one AI call reads and writes), template or ai
                # (two stages: a facts list first, then that writer; rockygpt-brain page_facts.py).
                "BRAIN_PAGE_WRITER",
+               # How hard the page writer thinks (write_answer and pick_sections calls only).
+               "BRAIN_OPENAI_DECIDE_EFFORT",
                "BRAIN_WRITER_MAX_OUTPUT_TOKENS", "BRAIN_OPENAI_EMBED_MODEL",
                "BRAIN_OPENAI_EMBED_INPUT_NUSD_PER_TOKEN", "BRAIN_OPENAI_EMBED_PRICE_VALID_UNTIL",
                # The release graph production serves, the same file the laptop serves
