@@ -25,7 +25,6 @@
         "BRAIN_OPENAI_PROJECT": "proj_aMhXgndK2e9EUQZpXbLFh4yV",
         "BRAIN_OUTPUT": "written",
         "BRAIN_HOWTO_ONE_CALL": "1",
-        "BRAIN_PAGE_WRITER": "direct",
         "BRAIN_OPENAI_DECIDE_EFFORT": "low",
         "BRAIN_WRITER_MAX_OUTPUT_TOKENS": "6000",
         "BRAIN_OPENAI_EMBED_MODEL": "text-embedding-3-large",
@@ -37,6 +36,7 @@
         "BRAIN_GRAPH_STORE_REGION": "auto"
       },
       "retired": [
+        "BRAIN_PAGE_WRITER",
         "BRAIN_ROUTING_MODE",
         "BRAIN_TYPESAFE_API_KEY",
         "STAGING_SERVICE_TOKEN"
