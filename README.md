@@ -52,12 +52,10 @@ security boundary is in [`docs/adr-native-client-security.md`](docs/adr-native-c
 
 ## Layout
 
-    deployment/   the split tooling, kept as a record
+    config/       production's settings manifest (environment-sync.json)
+    scripts/      the settings sync and the expiry watch
+    tests/        their tests
     docs/         operational notes
 
-## About deployment/
-
-`split-repos.sh` built these five repositories out of the original monorepo.
-That job is finished, and the script refuses to run: against the live
-repositories it would rebuild each one from scratch and force-push over
-whatever has been committed since. It is kept for the record, not for use.
+The split tooling that built the service repositories from the old monorepo was removed on
+2026-11-17; git history keeps it.
