@@ -121,7 +121,8 @@
         {
           "environment_id": "q67qwjjknjx6nqrbzdus6sa3vi",
           "keys": {
-            "SERVICE_TOKEN": "PRODUCTION_SERVICE_TOKEN"
+            "SERVICE_TOKEN": "PRODUCTION_SERVICE_TOKEN",
+            "LEDGER_OWNER_DATABASE_URL": "PRODUCTION_DATABASE_URL"
           }
         }
       ],
