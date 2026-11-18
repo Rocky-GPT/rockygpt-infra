@@ -1,0 +1,47 @@
+name: Ledger trim
+
+# Deletes the Brain's spending-ledger rows that are history only: settled model calls and answer
+# turns older than 60 days. Holds that never settled stay. The code is the Brain's
+# (rockygpt-brain scripts/trim_ledger.py); it runs from here because the trim needs the database
+# owner's login, which this repo's Environment Sync keeps in its secrets
+# (LEDGER_OWNER_DATABASE_URL, from 1Password's PRODUCTION_DATABASE_URL). A full free Neon
+# database stops the ledger, and with it every AI answer. Until 2026-11-17 the data repo's weekly
+# cleanup did this (audit item 15).
+on:
+  schedule:
+    - cron: '37 8 * * 0'  # Sundays, 03:37 New York (EST), the old cleanup's slot
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Count the rows only, delete nothing'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ledger-trim
+  cancel-in-progress: false
+
+jobs:
+  trim:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout the Brain
+        uses: actions/checkout@v7
+        with:
+          repository: Rocky-GPT/rockygpt-brain
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - run: pip install --require-hashes -r requirements.lock
+      - run: pip install --no-deps -e .
+      - name: Trim the ledger
+        env:
+          LEDGER_OWNER_DATABASE_URL: ${{ secrets.LEDGER_OWNER_DATABASE_URL }}
+          DRY_RUN: ${{ inputs.dry_run && '--dry-run' || '' }}
+        run: python scripts/trim_ledger.py $DRY_RUN
